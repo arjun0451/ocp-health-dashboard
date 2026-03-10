@@ -126,13 +126,23 @@ router.get('/docs/:checkId', (req, res) => {
 
 // ── SSL certs tab ─────────────────────────────────────────────────────────────
 // Returns ALL certs (not just expiring) with notBefore, notAfter, daysLeft.
-// The dashboard SSL tab fetches this and renders the sortable table.
+// Also returns stats: totalTLSFound, parsed, skippedNoCert, skippedParseErr, excluded, checked
 router.get('/ssl/certs', async (req, res) => {
   try {
     const certs = await getAllCertData();
-    res.json({ certs, total: certs.length });
+    const stats = certs._stats || {
+      totalTLSFound: certs.length,
+      parsed: certs.length,
+      skippedNoCert: 0,
+      skippedParseErr: 0,
+      excluded: certs.filter(c => c.excluded).length,
+      checked: certs.filter(c => !c.excluded).length,
+    };
+    res.json({ certs, total: certs.length, stats });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    logger.error(`SSL certs API error: ${e.message}`);
+    res.status(500).json({ error: e.message, certs: [], total: 0,
+      stats: { totalTLSFound: 0, parsed: 0, skippedNoCert: 0, skippedParseErr: 0, excluded: 0, checked: 0 } });
   }
 });
 

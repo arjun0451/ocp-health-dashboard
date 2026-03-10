@@ -30,7 +30,13 @@ const API_SERVER = process.env.API_URL || `https://${K8S_HOST}:${K8S_PORT}`;
  * @param {number}   [timeout=30000] – ms before the command is killed
  * @returns {Promise<string>}
  */
-function run(args, timeout = 30000) {
+/**
+ * Run an `oc` command and return stdout as a string.
+ * @param {string[]} args        – arguments after `oc`
+ * @param {number}   [timeout=30000]    – ms before the command is killed
+ * @param {number}   [maxBuffer=10MB]   – max stdout bytes (increase for large outputs)
+ */
+function run(args, timeout = 30000, maxBuffer = 10 * 1024 * 1024) {
   if (MOCK_MODE) return mockRun(args);
 
   return new Promise((resolve, reject) => {
@@ -47,7 +53,7 @@ function run(args, timeout = 30000) {
 
     logger.debug(`oc ${fullArgs.filter(a => !a.startsWith('--token')).join(' ')}`);
 
-    execFile(OC_BIN, fullArgs, { timeout, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile(OC_BIN, fullArgs, { timeout, maxBuffer }, (err, stdout, stderr) => {
       if (err) {
         logger.warn(`oc error: ${stderr || err.message}`);
         return reject(new Error(stderr || err.message));
@@ -155,13 +161,7 @@ kube-controller-manager-master-2   5/5   Running   0   2d`.trim(),
     'describe node worker-0': buildMockDescribeNode('worker-0', '4200m', '55%', '8000m', '105%', '8000Mi', '52%', '14000Mi', '92%'),
     'describe node worker-1': buildMockDescribeNode('worker-1', '3800m', '50%', '7200m', '95%', '7400Mi', '48%', '13000Mi', '85%'),
     'whoami': 'system:serviceaccount:ocp-health-dashboard:ocp-health-sa',
-    'get secrets --all-namespaces -o json': JSON.stringify({
-      items: [
-        { type: 'kubernetes.io/tls', metadata: { namespace: 'my-app', name: 'my-app-tls' },
-          data: { 'tls.crt': 'MIIBpTCCAQ6gAwIBAgIUFakeTestCertForMockMode123456AgIUMA0GCSqGSIb3DQEBCwUAMCMxITAfBgNVBAMMGG15LWFwcC50ZXN0LmV4YW1wbGUuY29tMB4XDTIzMDEwMTAwMDAwMFoXDTI1MTIzMTIzNTk1OVowIzEhMB8GA1UEAwwYbXktYXBwLnRlc3QuZXhhbXBsZS5jb20wgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBALtest' } },
-        { type: 'Opaque', metadata: { namespace: 'default', name: 'not-tls' }, data: {} },
-      ]
-    }),
+    'get secrets --all-namespaces -o go-template': buildMockSSLCerts(),
     'get pdb -A -o json': JSON.stringify({
       items: [
         { metadata: { namespace: 'production', name: 'api-pdb' },
@@ -190,6 +190,34 @@ kube-controller-manager-master-2   5/5   Running   0   2d`.trim(),
 
   // default: empty (pass)
   return Promise.resolve('');
+}
+
+function buildMockSSLCerts() {
+  // Simulate go-template output: NAMESPACE\tNAME\tBASE64_CERT\n
+  // Build real minimal DER certs with UTCTime tags so the ASN.1 scanner works
+  function makeDER(nbYY, nbMM, nbDD, naYY, naMM, naDD) {
+    function utctime(yy, mm, dd) {
+      const s = String(yy).padStart(2, '0')
+              + String(mm).padStart(2, '0')
+              + String(dd).padStart(2, '0')
+              + '120000Z';
+      return Buffer.from([0x17, 0x0d, ...Buffer.from(s, 'ascii')]);
+    }
+    return Buffer.concat([Buffer.alloc(30), utctime(nbYY,nbMM,nbDD), utctime(naYY,naMM,naDD), Buffer.alloc(30)]);
+  }
+  const lines = [
+    // future certs
+    ['my-app',          'api-tls',          makeDER(23,1,1,  27,6,30)],
+    ['my-app',          'frontend-tls',     makeDER(23,6,1,  26,12,31)],
+    ['production',      'ingress-cert',     makeDER(24,1,1,  25,6,30)],
+    // expiring soon (< 30 days from mock perspective — set to 2025-03-15)
+    ['production',      'db-cert-expiring', makeDER(22,3,1,  25,3,15)],
+    // excluded ns
+    ['openshift-kube-apiserver', 'aggregator-client-signer', makeDER(24,1,1, 26,1,1)],
+  ];
+  return lines.map(([ns, name, der]) =>
+    `${ns}\t${name}\t${der.toString('base64')}`
+  ).join('\n') + '\n';
 }
 
 function buildMockDescribeNode(name, cpuReq, cpuReqPct, cpuLim, cpuLimPct, memReq, memReqPct, memLim, memLimPct) {

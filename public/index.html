@@ -302,6 +302,27 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);font-size:14px
       <button class="btn btn-s" style="padding:5px 10px;font-size:12px" onclick="loadSSL(true)">↻ Refresh</button>
       <span class="tc" id="ssl-cnt"></span>
     </div>
+    <!-- Stats bar: shows TLS found / parsed / excluded / errors — Bug-3 -->
+    <div id="ssl-stats" style="display:none;margin-bottom:12px;padding:9px 14px;
+      background:var(--sf2);border:1px solid var(--bd);border-radius:var(--r);
+      font-size:12px;color:var(--t2);display:flex;gap:18px;flex-wrap:wrap;align-items:center">
+    </div>
+    <!-- Error panel: shows full error + stack if query fails — Bug-3 -->
+    <div id="ssl-error" style="display:none;margin-bottom:12px;padding:12px 15px;
+      background:var(--fail-bg);border:1px solid var(--fail);border-left:4px solid var(--fail);
+      border-radius:var(--r);font-size:13px;color:var(--fail)">
+      <strong>SSL query error</strong>
+      <div id="ssl-error-msg" style="margin-top:6px;font-family:var(--mono);font-size:11px;
+        white-space:pre-wrap;word-break:break-all;max-height:150px;overflow-y:auto"></div>
+    </div>
+    <!-- Refresh log: timestamped log of fetch attempts — Bug-3 -->
+    <details id="ssl-log-wrap" style="margin-bottom:12px">
+      <summary style="font-size:12px;color:var(--t3);cursor:pointer;user-select:none;
+        padding:4px 0">▸ Fetch log</summary>
+      <div id="ssl-log" style="font-family:var(--mono);font-size:11px;color:var(--t2);
+        background:var(--sf2);border:1px solid var(--bd);border-radius:var(--r);
+        padding:8px 12px;margin-top:6px;max-height:140px;overflow-y:auto;white-space:pre-wrap"></div>
+    </details>
     <div class="dtbl-wrap">
       <table class="dtbl" id="ssl-tbl">
         <colgroup><col style="width:220px"><col style="width:220px">
@@ -471,6 +492,9 @@ async function fetchOv(){
   }catch(e){console.error(e)}
 }
 function renderOv(s,r){
+  // Clear raw output map on each render (prevents unbounded memory growth)
+  _rawMap.clear();
+  _rawIdx=0;
   const cid=r.clusterID||s.clusterID||'—';
   $('cid').textContent=$('cid-hdr').textContent=cid;
   $('lrun').textContent=r.lastRunTime?new Date(r.lastRunTime).toLocaleString():'Never';
@@ -491,6 +515,11 @@ function renderOv(s,r){
   const cats=[...CORD.filter(c=>g[c]),...Object.keys(g).filter(c=>!CORD.includes(c))];
   $('cats').innerHTML=cats.map(c=>renderCat(c,g[c])).join('');
 }
+// Bug-2 fix: store rawOutput in a Map keyed by a row ID.
+// NEVER embed arbitrary text in HTML onclick attributes — special chars break the attr.
+const _rawMap = new Map();
+let _rawIdx = 0;
+
 function renderCat(cat,checks){
   const m=CMETA[cat]||{label:cat,icon:'•'};
   const pass=checks.filter(c=>c.status==='Passed').length;
@@ -501,11 +530,15 @@ function renderCat(cat,checks){
     fail>0?`<span class="pill pf">✗ ${fail}</span>`:'',
     skip>0?`<span class="pill ps">⊘ ${skip}</span>`:'',
   ].filter(Boolean).join('');
-  // Bug-1: table-layout:fixed + colgroup widths + td.det class for wrapping detail
+
   const rows=checks.map(r=>{
     const al=r.artifactPath?`<a class="alink" href="${r.artifactPath}" target="_blank">📄</a>`:'—';
     const db=`<button class="dbtn" title="Check guide" onclick="openGuide('${r.id}');event.stopPropagation()">?</button>`;
-    return `<tr class="ck" onclick="toggleDet(this,${JSON.stringify(r.rawOutput||'')})">
+    // Store rawOutput in map — use data attribute for key (safe, no quoting issues)
+    const key = ++_rawIdx;
+    _rawMap.set(key, r.rawOutput || '');
+    const clickable = r.rawOutput ? `class="ck" onclick="toggleDet(this,${key})"` : '';
+    return `<tr ${clickable}>
       <td class="mn">${r.no}</td>
       <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)} ${db}</td>
       <td>${bdg(r.status)}</td>
@@ -534,8 +567,9 @@ function renderCat(cat,checks){
     </div>
   </div>`;
 }
-function toggleDet(row,raw){
-  if(!raw)return;
+function toggleDet(row, key){
+  const raw = _rawMap.get(key) || '';
+  if(!raw) return;
   const nx=row.nextElementSibling;
   if(nx&&nx.classList.contains('det-row')){nx.remove();return}
   const tr=document.createElement('tr');
@@ -545,13 +579,71 @@ function toggleDet(row,raw){
 }
 
 // ── SSL TAB ────────────────────────────────────────────────────
+// Bug-3: proper error display, stats bar, and timestamped refresh log
+let sslStats = null;
+
+function sslLog(msg, isErr=false){
+  const el=$('ssl-log');
+  if(!el)return;
+  const ts=new Date().toLocaleTimeString();
+  const line=`[${ts}] ${msg}\n`;
+  el.textContent=(el.textContent||'')+line;
+  el.scrollTop=el.scrollHeight;
+  if(isErr) console.error('[SSL]', msg);
+  else console.log('[SSL]', msg);
+}
+
 async function loadSSL(force=false){
   if(sslLoaded&&!force)return; sslLoaded=true;
-  $('ssl-body').innerHTML='<tr class="ldr"><td colspan="6">Fetching certificates from cluster…</td></tr>';
+  $('ssl-error').style.display='none';
+  $('ssl-body').innerHTML='<tr class="ldr"><td colspan="6">Fetching TLS certificates from cluster…</td></tr>';
+  sslLog('Fetching /api/ssl/certs …');
+  const t0=Date.now();
   try{
-    const d=await(await fetch('/api/ssl/certs')).json();
-    sslData=d.certs||[]; renderSSL();
-  }catch(e){$('ssl-body').innerHTML=`<tr class="ldr"><td colspan="6">Error: ${esc(e.message)}</td></tr>`}
+    const resp=await fetch('/api/ssl/certs');
+    const d=await resp.json();
+    const elapsed=Date.now()-t0;
+
+    if(!resp.ok||d.error){
+      const msg=d.error||`HTTP ${resp.status}`;
+      sslLog(`ERROR: ${msg}`,true);
+      $('ssl-error').style.display='block';
+      $('ssl-error-msg').textContent=msg;
+      $('ssl-body').innerHTML=`<tr class="ldr"><td colspan="6">Query failed — see error panel above.</td></tr>`;
+      return;
+    }
+
+    sslData  = d.certs||[];
+    sslStats = d.stats||null;
+    sslLog(`OK: ${sslData.length} certs returned in ${elapsed}ms`
+      +(sslStats?` (TLS found:${sslStats.totalTLSFound} excluded:${sslStats.excluded} parseErr:${sslStats.skippedParseErr})`:''));
+
+    // Render stats bar
+    if(sslStats){
+      const sb=$('ssl-stats');
+      sb.style.display='flex';
+      sb.innerHTML=[
+        `<span>TLS secrets found: <strong>${sslStats.totalTLSFound}</strong></span>`,
+        `<span style="color:var(--bd2)">|</span>`,
+        `<span>Parsed: <strong>${sslStats.parsed}</strong></span>`,
+        `<span style="color:var(--bd2)">|</span>`,
+        `<span>Checked (non-excluded): <strong style="color:var(--pass)">${sslStats.checked}</strong></span>`,
+        `<span style="color:var(--bd2)">|</span>`,
+        `<span>Excluded namespaces: <strong>${sslStats.excluded}</strong></span>`,
+        sslStats.skippedParseErr>0
+          ?`<span style="color:var(--bd2)">|</span><span style="color:#f57c00">Parse errors: <strong>${sslStats.skippedParseErr}</strong></span>`
+          :'',
+      ].join('');
+    }
+
+    renderSSL();
+  }catch(e){
+    const elapsed=Date.now()-t0;
+    sslLog(`FETCH EXCEPTION after ${elapsed}ms: ${e.message}`,true);
+    $('ssl-error').style.display='block';
+    $('ssl-error-msg').textContent=e.stack||e.message;
+    $('ssl-body').innerHTML=`<tr class="ldr"><td colspan="6">Network error — see error panel above.</td></tr>`;
+  }
 }
 function renderSSL(){
   const q=($('ssl-q').value||'').toLowerCase();
@@ -595,9 +687,14 @@ async function loadNL(force=false){
   $('nl-body').innerHTML='<tr class="ldr"><td colspan="10">Fetching node resource limits…</td></tr>';
   try{
     const url='/api/nodes/limits'+(force?'?live=true':'');
-    const d=await(await fetch(url)).json();
+    const resp=await fetch(url);
+    const d=await resp.json();
+    if(!resp.ok||d.error){
+      $('nl-body').innerHTML=`<tr class="ldr"><td colspan="10">Error: ${esc(d.error||'HTTP '+resp.status)}</td></tr>`;
+      return;
+    }
     nlData=d.rows||[]; renderNL();
-  }catch(e){$('nl-body').innerHTML=`<tr class="ldr"><td colspan="10">Error: ${esc(e.message)}</td></tr>`}
+  }catch(e){$('nl-body').innerHTML=`<tr class="ldr"><td colspan="10">Network error: ${esc(e.message)}</td></tr>`}
 }
 function renderNL(){
   const over=nlData.filter(r=>r.over100).length;
@@ -627,9 +724,14 @@ async function loadPDB(force=false){
   if(pdbLoaded&&!force)return; pdbLoaded=true;
   $('pdb-body').innerHTML='<tr class="ldr"><td colspan="8">Fetching PDB data…</td></tr>';
   try{
-    const d=await(await fetch('/api/pdb')).json();
+    const resp=await fetch('/api/pdb');
+    const d=await resp.json();
+    if(!resp.ok||d.error){
+      $('pdb-body').innerHTML=`<tr class="ldr"><td colspan="8">Error: ${esc(d.error||'HTTP '+resp.status)}</td></tr>`;
+      return;
+    }
     pdbData=d.rows||[]; renderPDB(d.summary);
-  }catch(e){$('pdb-body').innerHTML=`<tr class="ldr"><td colspan="8">Error: ${esc(e.message)}</td></tr>`}
+  }catch(e){$('pdb-body').innerHTML=`<tr class="ldr"><td colspan="8">Network error: ${esc(e.message)}</td></tr>`}
 }
 const COLOR_RANK={red:0,orange:1,green:2,blue:3,grey:4};
 const COLOR_LBL={red:'🔴 Blocked',orange:'🟠 Low-HA',green:'🟢 Safe',blue:'🔵 Full Outage',grey:'⚪ N/A'};
