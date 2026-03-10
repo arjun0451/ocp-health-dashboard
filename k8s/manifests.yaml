@@ -1,0 +1,367 @@
+---
+# =============================================================================
+# 1. Namespace
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ocp-health-dashboard
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+
+---
+# =============================================================================
+# 2. ServiceAccount
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ocp-health-sa
+  namespace: ocp-health-dashboard
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+
+---
+# =============================================================================
+# 3. ClusterRoleBinding — cluster-admin for full health check access
+#    Required to: query nodes, all pods, secrets, PVCs, clusteroperators,
+#    clusterversions, machineconfigpools, and run oc adm top nodes.
+# =============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ocp-health-dashboard-cluster-admin
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+subjects:
+  - kind: ServiceAccount
+    name: ocp-health-sa
+    namespace: ocp-health-dashboard
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# =============================================================================
+# 4. ConfigMap — environment configuration
+#    Edit values here and restart the pod to apply changes.
+#    To disable a specific check, add CHECK_<ID_UPPERCASE>=false
+#    e.g.  CHECK_SSL_CERTIFICATES: "false"
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ocp-health-config
+  namespace: ocp-health-dashboard
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+data:
+  # ── Cluster endpoints ──────────────────────────────────────────────────────
+  API_URL:        "https://api.ocp.example.com:6443"
+  MCS_URL:        "https://api.ocp.example.com:22623"
+  CONSOLE_URL:    "https://console-openshift-console.apps.ocp.example.com"
+  CLUSTER_ID:     "my-ocp-cluster"
+
+  # ── Schedule ───────────────────────────────────────────────────────────────
+  # Override the YAML config schedule_hours via this env var
+  SCHEDULE_HOURS: "12"
+  # Or set a full cron expression (takes precedence over SCHEDULE_HOURS)
+  # CRON_SCHEDULE: "0 6,18 * * *"
+  RUN_ON_STARTUP: "true"
+
+  # ── Thresholds ─────────────────────────────────────────────────────────────
+  # These override the per-check threshold values in checks-config.yaml
+  # (checks-config.yaml thresholds take effect if these env vars are absent)
+
+  # ── Artifact retention ─────────────────────────────────────────────────────
+  ARTIFACT_RETENTION_DAYS: "30"
+
+  # ── Logging ────────────────────────────────────────────────────────────────
+  LOG_LEVEL: "info"
+
+  # ── Per-check overrides ────────────────────────────────────────────────────
+  # Uncomment to disable individual checks without redeploying the image:
+  # CHECK_SSL_CERTIFICATES: "false"
+  # CHECK_NODE_CPU: "false"
+  # CHECK_NON_PLATFORM_PODS: "false"
+
+---
+# =============================================================================
+# 5. ConfigMap — checks-config.yaml (mounted as file)
+#    Controls which checks run and in what order.
+#    Modify and apply; restart the pod to pick up changes.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ocp-health-checks-config
+  namespace: ocp-health-dashboard
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+data:
+  checks-config.yaml: |
+    schedule_hours: 12
+    run_on_startup: true
+    artifact_retention_days: 30
+
+    categories:
+      - control_plane
+      - nodes
+      - pods
+      - networking
+      - storage
+      - security
+      - monitoring
+
+    checks:
+      - id: cluster_operators
+        name: Cluster Operators
+        category: control_plane
+        enabled: true
+
+      - id: cluster_version
+        name: Cluster Version
+        category: control_plane
+        enabled: true
+
+      - id: machine_config_pool
+        name: MachineConfigPool
+        category: control_plane
+        enabled: true
+
+      - id: etcd_health
+        name: Etcd Cluster Health
+        category: control_plane
+        enabled: true
+
+      - id: authentication
+        name: Authentication Pods
+        category: control_plane
+        enabled: true
+
+      - id: control_plane_pods
+        name: Control Plane Pods
+        category: control_plane
+        enabled: true
+
+      - id: node_readiness
+        name: Node Readiness
+        category: nodes
+        enabled: true
+
+      - id: node_cpu
+        name: Node CPU Usage
+        category: nodes
+        enabled: true
+        threshold: 80
+
+      - id: node_memory
+        name: Node Memory Usage
+        category: nodes
+        enabled: true
+        threshold: 80
+
+      - id: platform_pods
+        name: Platform Namespace Pods
+        category: pods
+        enabled: true
+
+      - id: non_platform_pods
+        name: Non-Platform Pods
+        category: pods
+        enabled: true
+
+      - id: api_server
+        name: API Server Health
+        category: networking
+        enabled: true
+
+      - id: ingress_controller
+        name: Ingress Controller Health
+        category: networking
+        enabled: true
+
+      - id: machine_config_server
+        name: Machine Config Server
+        category: networking
+        enabled: true
+
+      - id: pvc_health
+        name: PVC and PV Health
+        category: storage
+        enabled: true
+
+      - id: ssl_certificates
+        name: SSL Certificate Expiry
+        category: security
+        enabled: true
+        threshold: 30
+
+      - id: monitoring_stack
+        name: Monitoring Stack
+        category: monitoring
+        enabled: true
+
+---
+# =============================================================================
+# 6. PersistentVolumeClaim — artifact storage
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ocp-health-artifacts
+  namespace: ocp-health-dashboard
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  # storageClassName: standard   # uncomment and set your storage class
+
+---
+# =============================================================================
+# 7. Deployment
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ocp-health-dashboard
+  namespace: ocp-health-dashboard
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+    app: ocp-health-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ocp-health-dashboard
+  template:
+    metadata:
+      labels:
+        app: ocp-health-dashboard
+        app.kubernetes.io/name: ocp-health-dashboard
+    spec:
+      serviceAccountName: ocp-health-sa
+      automountServiceAccountToken: true
+
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: dashboard
+          # ── Update this image reference after build & push ──────────────
+          image: image-registry.openshift-image-registry.svc:5000/ocp-health-dashboard/ocp-health-dashboard:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+
+          # ── Environment from ConfigMap ──────────────────────────────────
+          envFrom:
+            - configMapRef:
+                name: ocp-health-config
+
+          # ── Mount the checks-config YAML ────────────────────────────────
+          env:
+            - name: CONFIG_PATH
+              value: /etc/ocp-health/checks-config.yaml
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "256Mi"
+            limits:
+              cpu:    "500m"
+              memory: "512Mi"
+
+          volumeMounts:
+            - name: artifacts
+              mountPath: /artifacts
+            - name: checks-config
+              mountPath: /etc/ocp-health
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: ocp-health-artifacts
+        - name: checks-config
+          configMap:
+            name: ocp-health-checks-config
+        - name: tmp
+          emptyDir: {}
+
+      restartPolicy: Always
+
+---
+# =============================================================================
+# 8. Service
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: ocp-health-dashboard
+  namespace: ocp-health-dashboard
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+spec:
+  selector:
+    app: ocp-health-dashboard
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+
+---
+# =============================================================================
+# 9. Route — TLS edge termination
+# =============================================================================
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ocp-health-dashboard
+  namespace: ocp-health-dashboard
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+spec:
+  to:
+    kind: Service
+    name: ocp-health-dashboard
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

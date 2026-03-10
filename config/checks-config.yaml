@@ -1,0 +1,127 @@
+# OCP Health Dashboard – Check Configuration
+# Mounted as ConfigMap. Set enabled: false to skip without redeploy.
+
+schedule_hours:          12   # run every N hours
+run_on_startup:          true
+artifact_retention_days: 30
+
+categories:
+  - control_plane
+  - nodes
+  - pods
+  - networking
+  - storage
+  - security
+  - monitoring
+  - availability
+
+checks:
+  # ── Control Plane ─────────────────────────────────────────────────────────
+  - id: cluster_operators
+    name: Cluster Operators
+    category: control_plane
+    enabled: true
+
+  - id: cluster_version
+    name: Cluster Version
+    category: control_plane
+    enabled: true
+
+  - id: machine_config_pool
+    name: MachineConfigPool
+    category: control_plane
+    enabled: true
+
+  - id: etcd_health
+    name: Etcd Cluster Health
+    category: control_plane
+    enabled: true
+
+  - id: authentication
+    name: Authentication Pods
+    category: control_plane
+    enabled: true
+
+  - id: control_plane_pods
+    name: Control Plane Pods
+    category: control_plane
+    enabled: true
+
+  # ── Nodes ─────────────────────────────────────────────────────────────────
+  - id: node_readiness
+    name: Node Readiness
+    category: nodes
+    enabled: true
+
+  - id: node_cpu
+    name: Node CPU Usage
+    category: nodes
+    enabled: true
+    threshold: 80          # percent — flag above this
+
+  - id: node_memory
+    name: Node Memory Usage
+    category: nodes
+    enabled: true
+    threshold: 80          # percent
+
+  - id: node_limits
+    name: Node Resource Limits
+    category: nodes
+    enabled: true
+    # Flags any node where CPU requests, CPU limits, memory requests,
+    # OR memory limits exceed 100% of node capacity.
+    # Data also feeds the "Node Limits" tab in the dashboard.
+
+  # ── Pods ──────────────────────────────────────────────────────────────────
+  - id: platform_pods
+    name: Platform Namespace Pods
+    category: pods
+    enabled: true
+
+  - id: non_platform_pods
+    name: Non-Platform Pods
+    category: pods
+    enabled: true
+
+  # ── Networking ────────────────────────────────────────────────────────────
+  - id: api_server
+    name: API Server Health
+    category: networking
+    enabled: true
+
+  - id: ingress_controller
+    name: Ingress Controller Health
+    category: networking
+    enabled: true
+
+  - id: machine_config_server
+    name: Machine Config Server
+    category: networking
+    enabled: true
+
+  # ── Storage ───────────────────────────────────────────────────────────────
+  - id: pvc_health
+    name: PVC and PV Health
+    category: storage
+    enabled: true
+
+  # ── Security ──────────────────────────────────────────────────────────────
+  - id: ssl_certificates
+    name: SSL Certificate Expiry
+    category: security
+    enabled: true
+    threshold: 30          # days before expiry to flag
+
+  # ── Monitoring ────────────────────────────────────────────────────────────
+  - id: monitoring_stack
+    name: Monitoring Stack
+    category: monitoring
+    enabled: true
+
+  # ── Availability ──────────────────────────────────────────────────────────
+  - id: pdb_health
+    name: PodDisruptionBudget Health
+    category: availability
+    enabled: true
+    # Excluded namespaces: all openshift-* namespaces (same as bash script)
