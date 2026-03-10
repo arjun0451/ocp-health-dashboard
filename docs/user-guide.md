@@ -22,7 +22,7 @@ This guide explains how to use the OCP Health Dashboard web interface.
 
 The Overview tab is the landing page of the dashboard. It shows the current status of all health checks grouped by category.
  
-![Overview tab screenshot](images/Landingpage.png "Dashboard Overview")
+![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c08d199c24d245ed44a6f1b81d05645edbd13cbd/images/Landingpage.png "Dashboard Overview")
 
 ### Header Bar
 
