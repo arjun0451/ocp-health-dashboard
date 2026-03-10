@@ -65,8 +65,7 @@ Each row shows:
 
 **Clicking a Failed or Error row** expands an inline detail panel showing the raw `oc` output that caused the failure — exact pod names, namespace, error messages, etc.
 
-> **Screenshot placeholder:**  
-> `[screenshot: expanded row detail panel showing raw oc output for a failed check]`
+> ![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c0aeecd9687656f68118fbc1d522101d7283f509/images/checkerror.png "Error details")
 
 ### Status Badges
 
@@ -82,9 +81,8 @@ Each row shows:
 ## SSL Certificates Tab
 
 The SSL Certificates tab displays all `kubernetes.io/tls` secrets found in the cluster with their validity details.
+![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c0aeecd9687656f68118fbc1d522101d7283f509/images/ssltab.png "SSL details")
 
-> **Screenshot placeholder:**  
-> `[screenshot: SSL Certificates tab with expiring filter active, showing stats bar at top]`
 
 ### Loading and Refreshing
 
@@ -164,8 +162,6 @@ Click **🔍 Debug** to open the debug panel. It calls `/api/ssl/debug` and show
 
 Use this if `parsed: 0` or `parse errors` appears in the stats bar, to verify what `oc` is actually returning.
 
-> **Screenshot placeholder:**  
-> `[screenshot: Debug panel open showing raw record count and sample output]`
 
 ---
 
@@ -173,8 +169,9 @@ Use this if `parsed: 0` or `parse errors` appears in the stats bar, to verify wh
 
 The Node Limits tab shows **scheduled resource utilisation** — how much of each node's CPU and memory capacity has been claimed by pod requests and limits.
 
-> **Screenshot placeholder:**  
-> `[screenshot: Node Limits tab showing summary cards and per-node table with red/orange highlights]`
+
+![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c0aeecd9687656f68118fbc1d522101d7283f509/images/nodelimits.png "Nodelimits Overview")
+
 
 ### Summary Cards
 
@@ -219,8 +216,8 @@ Click **↻ Live Refresh** to re-run `oc describe node` for all nodes right now.
 
 The PDB Analysis tab shows the disruption headroom for every PodDisruptionBudget in your application namespaces.
 
-> **Screenshot placeholder:**  
-> `[screenshot: PDB Analysis tab with warning banner, summary cards, and colour-coded table rows]`
+
+![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c0aeecd9687656f68118fbc1d522101d7283f509/images/pdb.png "PDB Overview")
 
 ### Warning Banner
 
@@ -275,8 +272,6 @@ Every row in the Overview tab has a **?** button next to the check name. Clickin
 - The most common causes of failure
 - Suggested remediation steps
 
-> **Screenshot placeholder:**  
-> `[screenshot: Check Guide panel open for 'SSL Certificate Expiry' showing explanation and remediation steps]`
 
 The guide panel can be closed by clicking the **?** button again or clicking elsewhere on the row.
 
@@ -286,8 +281,9 @@ The guide panel can be closed by clicking the **?** button again or clicking els
 
 Click the **History** tab to see a list of previous check runs.
 
-> **Screenshot placeholder:**  
-> `[screenshot: History tab showing list of past runs with timestamps and overall status]`
+
+![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c0aeecd9687656f68118fbc1d522101d7283f509/images/history.png "Run history")
+
 
 Each entry shows:
 - Run timestamp
