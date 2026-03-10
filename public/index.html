@@ -290,53 +290,72 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);font-size:14px
     <div id="cats"></div>
   </div>
 
-  <!-- SSL CERTIFICATES -->
+  <!-- SSL CERTIFICATES TAB -->
   <div class="tab-panel" id="tab-ssl">
     <div class="toolbar">
-      <input type="text" id="ssl-q" placeholder="Filter namespace / secret…" oninput="renderSSL()">
+      <input type="text" id="ssl-q" placeholder="Filter namespace / secret name…" oninput="renderSSL()" style="width:220px">
       <select id="ssl-show" onchange="renderSSL()">
-        <option value="all">All certificates</option>
-        <option value="expiring">Expiring &lt;30 days</option>
-        <option value="excl">Excluded namespaces</option>
+        <option value="expiring" selected>Expiring &lt;30 days (default)</option>
+        <option value="all">All TLS certificates</option>
+        <option value="valid">Valid ≥30 days</option>
+        <option value="excl">Excluded namespaces only</option>
       </select>
-      <button class="btn btn-s" style="padding:5px 10px;font-size:12px" onclick="loadSSL(true)">↻ Refresh</button>
-      <span class="tc" id="ssl-cnt"></span>
+      <button class="btn btn-s" style="padding:5px 12px;font-size:12px" onclick="loadSSL(true)">↻ Refresh</button>
+      <button class="btn btn-s" style="padding:5px 12px;font-size:12px;background:var(--sf2);color:var(--t2)" onclick="loadSSLDebug()">🔍 Debug</button>
+      <span class="tc" id="ssl-cnt" style="font-size:12px;color:var(--t3)"></span>
     </div>
-    <!-- Stats bar: shows TLS found / parsed / excluded / errors — Bug-3 -->
-    <div id="ssl-stats" style="display:none;margin-bottom:12px;padding:9px 14px;
+
+    <!-- Stats bar -->
+    <div id="ssl-stats" style="display:none;margin-bottom:10px;padding:8px 14px;
       background:var(--sf2);border:1px solid var(--bd);border-radius:var(--r);
-      font-size:12px;color:var(--t2);display:flex;gap:18px;flex-wrap:wrap;align-items:center">
-    </div>
-    <!-- Error panel: shows full error + stack if query fails — Bug-3 -->
-    <div id="ssl-error" style="display:none;margin-bottom:12px;padding:12px 15px;
-      background:var(--fail-bg);border:1px solid var(--fail);border-left:4px solid var(--fail);
+      font-size:12px;color:var(--t2);display:flex;gap:16px;flex-wrap:wrap;align-items:center"></div>
+
+    <!-- Error panel -->
+    <div id="ssl-error" style="display:none;margin-bottom:10px;padding:12px 15px;
+      background:#fff5f5;border:1px solid var(--fail);border-left:4px solid var(--fail);
       border-radius:var(--r);font-size:13px;color:var(--fail)">
-      <strong>SSL query error</strong>
+      <strong>⚠ SSL query error</strong>
       <div id="ssl-error-msg" style="margin-top:6px;font-family:var(--mono);font-size:11px;
-        white-space:pre-wrap;word-break:break-all;max-height:150px;overflow-y:auto"></div>
+        white-space:pre-wrap;word-break:break-all;max-height:180px;overflow-y:auto;
+        color:#333;background:#ffeaea;padding:8px;border-radius:4px"></div>
     </div>
-    <!-- Refresh log: timestamped log of fetch attempts — Bug-3 -->
-    <details id="ssl-log-wrap" style="margin-bottom:12px">
-      <summary style="font-size:12px;color:var(--t3);cursor:pointer;user-select:none;
-        padding:4px 0">▸ Fetch log</summary>
+
+    <!-- Debug panel (hidden by default) -->
+    <div id="ssl-debug" style="display:none;margin-bottom:10px;padding:12px 15px;
+      background:#f0f4ff;border:1px solid #c5d0f0;border-radius:var(--r);font-size:12px">
+      <strong>🔍 Debug: Raw oc output sample</strong>
+      <div id="ssl-debug-msg" style="margin-top:6px;font-family:var(--mono);font-size:11px;
+        white-space:pre-wrap;word-break:break-all;max-height:220px;overflow-y:auto;
+        color:#333;background:#e8eeff;padding:8px;border-radius:4px"></div>
+    </div>
+
+    <!-- Fetch log (collapsed by default) -->
+    <details style="margin-bottom:10px">
+      <summary style="font-size:12px;color:var(--t3);cursor:pointer;user-select:none;padding:3px 0">
+        ▸ Fetch log</summary>
       <div id="ssl-log" style="font-family:var(--mono);font-size:11px;color:var(--t2);
         background:var(--sf2);border:1px solid var(--bd);border-radius:var(--r);
-        padding:8px 12px;margin-top:6px;max-height:140px;overflow-y:auto;white-space:pre-wrap"></div>
+        padding:8px 12px;margin-top:6px;max-height:130px;overflow-y:auto;white-space:pre"></div>
     </details>
+
     <div class="dtbl-wrap">
       <table class="dtbl" id="ssl-tbl">
-        <colgroup><col style="width:220px"><col style="width:220px">
-          <col style="width:110px"><col style="width:110px"><col style="width:88px"><col style="width:auto">
+        <colgroup>
+          <col style="width:220px"><col style="width:230px">
+          <col style="width:108px"><col style="width:108px">
+          <col style="width:90px"><col style="width:auto">
         </colgroup>
         <thead><tr>
-          <th data-col="ns"       onclick="sortT('ssl','ns')">Namespace <span class="sa">↕</span></th>
-          <th data-col="name"     onclick="sortT('ssl','name')">Secret Name <span class="sa">↕</span></th>
-          <th data-col="notBefore" onclick="sortT('ssl','notBefore')">Start Date <span class="sa">↕</span></th>
-          <th data-col="notAfter" onclick="sortT('ssl','notAfter')">Expiry Date <span class="sa">↕</span></th>
-          <th data-col="daysLeft" onclick="sortT('ssl','daysLeft')">Days Left <span class="sa">↕</span></th>
+          <th onclick="sortT('ssl','ns')" style="cursor:pointer">Namespace <span class="sa">↕</span></th>
+          <th onclick="sortT('ssl','name')" style="cursor:pointer">Secret Name <span class="sa">↕</span></th>
+          <th onclick="sortT('ssl','notBefore')" style="cursor:pointer">Start Date <span class="sa">↕</span></th>
+          <th onclick="sortT('ssl','notAfter')" style="cursor:pointer">Expiry Date <span class="sa">↕</span></th>
+          <th onclick="sortT('ssl','daysLeft')" style="cursor:pointer;text-align:right">Days Left <span class="sa">↕</span></th>
           <th>Status</th>
         </tr></thead>
-        <tbody id="ssl-body"><tr class="ldr"><td colspan="6">Loading SSL certificates…</td></tr></tbody>
+        <tbody id="ssl-body">
+          <tr class="ldr"><td colspan="6">Select the SSL Certificates tab to load data…</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -463,6 +482,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);font-size:14px
 let lastRunId=null, pollTmr=null, docsCache=null;
 let sslData=[], nlData=[], pdbData=[];
 let sslLoaded=false, nlLoaded=false, pdbLoaded=false;
+let sslStats=null;
 const SS={ssl:{col:'daysLeft',dir:1},nl:{col:'node',dir:1},pdb:{col:'color',dir:1}};
 const CMETA={
   control_plane:{label:'Control Plane',icon:'⚙️'},nodes:{label:'Nodes',icon:'🖥️'},
@@ -578,108 +598,220 @@ function toggleDet(row, key){
   row.parentNode.insertBefore(tr,row.nextSibling);
 }
 
-// ── SSL TAB ────────────────────────────────────────────────────
-// Bug-3: proper error display, stats bar, and timestamped refresh log
-let sslStats = null;
+// ═══════════════════════════════════════════════════════════════
+// SSL CERTIFICATES TAB
+// ═══════════════════════════════════════════════════════════════
+// Dropdown values:
+//   'expiring' — daysLeft < THRESH AND NOT excluded  (DEFAULT)
+//   'all'      — every cert including excluded
+//   'valid'    — daysLeft >= THRESH AND NOT excluded
+//   'excl'     — excluded namespace certs only
+//
+// Encoding note: .data.tls.crt = base64(PEM). The server double-decodes
+// (outer b64 → PEM text → strip headers → inner b64 → DER → ASN.1 scan).
+// ═══════════════════════════════════════════════════════════════
+const CERT_THRESH = 30;  // days — matches server default
 
-function sslLog(msg, isErr=false){
-  const el=$('ssl-log');
-  if(!el)return;
-  const ts=new Date().toLocaleTimeString();
-  const line=`[${ts}] ${msg}\n`;
-  el.textContent=(el.textContent||'')+line;
-  el.scrollTop=el.scrollHeight;
-  if(isErr) console.error('[SSL]', msg);
-  else console.log('[SSL]', msg);
+function sslLog(msg, isErr=false) {
+  const el = $('ssl-log');
+  if (!el) return;
+  const ts   = new Date().toLocaleTimeString();
+  el.textContent += `[${ts}] ${msg}\n`;
+  el.scrollTop = el.scrollHeight;
+  if (isErr) console.error('[SSL]', msg);
+  else       console.log('[SSL]',  msg);
 }
 
-async function loadSSL(force=false){
-  if(sslLoaded&&!force)return; sslLoaded=true;
-  $('ssl-error').style.display='none';
-  $('ssl-body').innerHTML='<tr class="ldr"><td colspan="6">Fetching TLS certificates from cluster…</td></tr>';
-  sslLog('Fetching /api/ssl/certs …');
-  const t0=Date.now();
-  try{
-    const resp=await fetch('/api/ssl/certs');
-    const d=await resp.json();
-    const elapsed=Date.now()-t0;
+async function loadSSL(force=false) {
+  if (sslLoaded && !force) return;
+  sslLoaded = true;
 
-    if(!resp.ok||d.error){
-      const msg=d.error||`HTTP ${resp.status}`;
-      sslLog(`ERROR: ${msg}`,true);
-      $('ssl-error').style.display='block';
-      $('ssl-error-msg').textContent=msg;
-      $('ssl-body').innerHTML=`<tr class="ldr"><td colspan="6">Query failed — see error panel above.</td></tr>`;
+  // Reset UI
+  $('ssl-error').style.display = 'none';
+  $('ssl-debug').style.display = 'none';
+  $('ssl-body').innerHTML = '<tr class="ldr"><td colspan="6">⏳ Fetching TLS certificates from cluster…</td></tr>';
+  sslLog(`Fetching /api/ssl/certs …`);
+  const t0 = Date.now();
+
+  try {
+    const resp    = await fetch('/api/ssl/certs');
+    const d       = await resp.json();
+    const elapsed = Date.now() - t0;
+
+    if (!resp.ok || d.error) {
+      const msg = d.error || `HTTP ${resp.status}`;
+      sslLog(`ERROR after ${elapsed}ms: ${msg}`, true);
+      $('ssl-error').style.display = 'block';
+      $('ssl-error-msg').textContent = msg;
+      $('ssl-body').innerHTML = '<tr class="ldr"><td colspan="6">❌ Query failed — see error panel above and click 🔍 Debug for raw oc output.</td></tr>';
       return;
     }
 
-    sslData  = d.certs||[];
-    sslStats = d.stats||null;
-    sslLog(`OK: ${sslData.length} certs returned in ${elapsed}ms`
-      +(sslStats?` (TLS found:${sslStats.totalTLSFound} excluded:${sslStats.excluded} parseErr:${sslStats.skippedParseErr})`:''));
+    sslData  = Array.isArray(d.certs) ? d.certs : [];
+    sslStats = d.stats || null;
+
+    const excl    = sslData.filter(c =>  c.excluded).length;
+    const checked = sslData.filter(c => !c.excluded).length;
+    const exp     = sslData.filter(c => !c.excluded && c.daysLeft < CERT_THRESH).length;
+
+    sslLog(
+      `OK in ${elapsed}ms — ` +
+      `TLS found: ${sslStats ? sslStats.totalTLSFound : sslData.length}  ` +
+      `parsed: ${sslData.length}  ` +
+      `excluded: ${excl}  ` +
+      `checked: ${checked}  ` +
+      `expiring<${CERT_THRESH}d: ${exp}` +
+      (sslStats && sslStats.skippedParseErr ? `  parseErr: ${sslStats.skippedParseErr}` : '')
+    );
 
     // Render stats bar
-    if(sslStats){
-      const sb=$('ssl-stats');
-      sb.style.display='flex';
-      sb.innerHTML=[
+    if (sslStats) {
+      const bar = $('ssl-stats');
+      bar.style.display = 'flex';
+      bar.innerHTML = [
         `<span>TLS secrets found: <strong>${sslStats.totalTLSFound}</strong></span>`,
-        `<span style="color:var(--bd2)">|</span>`,
-        `<span>Parsed: <strong>${sslStats.parsed}</strong></span>`,
-        `<span style="color:var(--bd2)">|</span>`,
-        `<span>Checked (non-excluded): <strong style="color:var(--pass)">${sslStats.checked}</strong></span>`,
-        `<span style="color:var(--bd2)">|</span>`,
-        `<span>Excluded namespaces: <strong>${sslStats.excluded}</strong></span>`,
-        sslStats.skippedParseErr>0
-          ?`<span style="color:var(--bd2)">|</span><span style="color:#f57c00">Parse errors: <strong>${sslStats.skippedParseErr}</strong></span>`
-          :'',
+        `<span style="color:var(--bd)">│</span>`,
+        `<span>Parsed OK: <strong>${sslStats.parsed}</strong></span>`,
+        `<span style="color:var(--bd)">│</span>`,
+        `<span>Checked: <strong style="color:var(--pass)">${sslStats.checked}</strong></span>`,
+        `<span style="color:var(--bd)">│</span>`,
+        `<span>Excluded: <strong>${sslStats.excluded}</strong></span>`,
+        sslStats.skippedParseErr > 0
+          ? `<span style="color:var(--bd)">│</span>
+             <span style="color:#d84315">Parse errors: <strong>${sslStats.skippedParseErr}</strong>
+             — click 🔍 Debug</span>`
+          : '',
+        sslStats.activeFilter
+          ? `<span style="color:var(--bd)">│</span>
+             <span title="${sslStats.activeFilter}" style="cursor:help;text-decoration:underline dotted">
+             Filter mode: ${sslStats.excludeMode}</span>`
+          : '',
       ].join('');
     }
 
     renderSSL();
-  }catch(e){
-    const elapsed=Date.now()-t0;
-    sslLog(`FETCH EXCEPTION after ${elapsed}ms: ${e.message}`,true);
-    $('ssl-error').style.display='block';
-    $('ssl-error-msg').textContent=e.stack||e.message;
-    $('ssl-body').innerHTML=`<tr class="ldr"><td colspan="6">Network error — see error panel above.</td></tr>`;
+
+  } catch (e) {
+    const elapsed = Date.now() - t0;
+    sslLog(`EXCEPTION after ${elapsed}ms: ${e.message}`, true);
+    $('ssl-error').style.display   = 'block';
+    $('ssl-error-msg').textContent = (e.stack || e.message);
+    $('ssl-body').innerHTML = '<tr class="ldr"><td colspan="6">❌ Network error — see error panel above.</td></tr>';
   }
 }
-function renderSSL(){
-  const q=($('ssl-q').value||'').toLowerCase();
-  const show=$('ssl-show').value;
-  const THRESH=30;
-  let rows=sslData.filter(c=>{
-    if(show==='expiring'&&(c.excluded||c.daysLeft>=THRESH))return false;
-    if(show==='excl'&&!c.excluded)return false;
-    if(q&&!c.ns.toLowerCase().includes(q)&&!c.name.toLowerCase().includes(q))return false;
-    return true;
+
+function renderSSL() {
+  const q    = ($('ssl-q').value || '').toLowerCase().trim();
+  const show = $('ssl-show').value;  // 'expiring' | 'all' | 'valid' | 'excl'
+
+  // Filter logic — each value has an explicit, distinct condition
+  const rows = sslData.filter(c => {
+    // Text filter applies to all modes
+    if (q && !c.ns.toLowerCase().includes(q) && !c.name.toLowerCase().includes(q)) return false;
+
+    switch (show) {
+      case 'expiring':
+        // Show certs expiring within threshold (excluding excluded-NS certs)
+        return !c.excluded && c.daysLeft < CERT_THRESH;
+      case 'valid':
+        // Show non-excluded certs that are still valid (>= threshold)
+        return !c.excluded && c.daysLeft >= CERT_THRESH;
+      case 'excl':
+        // Show only excluded-namespace certs
+        return c.excluded;
+      case 'all':
+      default:
+        // Show everything
+        return true;
+    }
   });
-  const{col,dir}=SS.ssl;
-  rows.sort((a,b)=>typeof a[col]==='number'?(a[col]-b[col])*dir:String(a[col]).localeCompare(String(b[col]))*dir);
-  $('ssl-cnt').textContent=`Showing ${rows.length} / ${sslData.length} certs`;
-  if(!rows.length){$('ssl-body').innerHTML='<tr class="ldr"><td colspan="6">No certificates match filter.</td></tr>';return}
-  $('ssl-body').innerHTML=rows.map(c=>{
-    let dcls,dlbl;
-    if(c.excluded){dcls='days-x';dlbl=`${c.daysLeft}d (excluded)`}
-    else if(c.daysLeft<0){dcls='days-c';dlbl=`${c.daysLeft}d EXPIRED`}
-    else if(c.daysLeft<THRESH){dcls='days-c';dlbl=`${c.daysLeft}d`}
-    else if(c.daysLeft<90){dcls='days-w';dlbl=`${c.daysLeft}d`}
-    else{dcls='days-ok';dlbl=`${c.daysLeft}d`}
-    const sb=c.excluded?'<span class="badge" style="background:var(--sf2);color:var(--t3)">Excluded</span>'
-      :c.daysLeft<0?'<span class="badge b-f">Expired</span>'
-      :c.daysLeft<THRESH?'<span class="badge b-f">Expiring</span>'
-      :'<span class="badge b-p">Valid</span>';
+
+  // Sort
+  const { col, dir } = SS.ssl;
+  rows.sort((a, b) => {
+    if (typeof a[col] === 'number') return (a[col] - b[col]) * dir;
+    return String(a[col]).localeCompare(String(b[col])) * dir;
+  });
+
+  // Counter label
+  const totalNonExcl = sslData.filter(c => !c.excluded).length;
+  const expCount     = sslData.filter(c => !c.excluded && c.daysLeft < CERT_THRESH).length;
+  $('ssl-cnt').textContent =
+    `Showing ${rows.length} cert${rows.length !== 1 ? 's' : ''}` +
+    (show === 'all'
+      ? ` of ${sslData.length} total (${sslData.filter(c=>c.excluded).length} excluded)`
+      : show === 'expiring'
+        ? ` expiring soon (${expCount} of ${totalNonExcl} checked)`
+        : show === 'valid'
+          ? ` valid of ${totalNonExcl} checked`
+          : ` in excluded namespaces`);
+
+  if (!rows.length) {
+    const emptyMsg = show === 'expiring'
+      ? '✅ No certificates expiring within ' + CERT_THRESH + ' days in checked namespaces.'
+      : 'No certificates match the current filter.';
+    $('ssl-body').innerHTML = `<tr class="ldr"><td colspan="6">${emptyMsg}</td></tr>`;
+    return;
+  }
+
+  $('ssl-body').innerHTML = rows.map(c => {
+    // Days-left column class and label
+    let dcls, dlbl;
+    if (c.excluded) {
+      dcls = 'days-x'; dlbl = c.daysLeft + 'd';
+    } else if (c.daysLeft < 0) {
+      dcls = 'days-c'; dlbl = 'EXPIRED ' + Math.abs(c.daysLeft) + 'd ago';
+    } else if (c.daysLeft < CERT_THRESH) {
+      dcls = 'days-c'; dlbl = c.daysLeft + 'd';
+    } else if (c.daysLeft < 90) {
+      dcls = 'days-w'; dlbl = c.daysLeft + 'd';
+    } else {
+      dcls = 'days-ok'; dlbl = c.daysLeft + 'd';
+    }
+
+    // Status badge
+    const badge = c.excluded
+      ? '<span class="badge" style="background:#eee;color:#888;border:1px solid #ccc">Excluded</span>'
+      : c.daysLeft < 0
+        ? '<span class="badge b-f">🔴 Expired</span>'
+        : c.daysLeft < CERT_THRESH
+          ? `<span class="badge b-f">🟠 Expiring</span>`
+          : '<span class="badge b-p">🟢 Valid</span>';
+
     return `<tr>
-      <td style="font-family:var(--mono);font-size:12px">${esc(c.ns)}</td>
-      <td style="font-family:var(--mono);font-size:12px">${esc(c.name)}</td>
-      <td style="font-family:var(--mono);font-size:12px">${c.notBefore}</td>
-      <td style="font-family:var(--mono);font-size:12px">${c.notAfter}</td>
+      <td style="font-family:var(--mono);font-size:12px;word-break:break-all">${esc(c.ns)}</td>
+      <td style="font-family:var(--mono);font-size:12px;word-break:break-all">${esc(c.name)}</td>
+      <td style="font-family:var(--mono);font-size:12px">${esc(c.notBefore)}</td>
+      <td style="font-family:var(--mono);font-size:12px">${esc(c.notAfter)}</td>
       <td class="${dcls}" style="font-family:var(--mono);font-size:12px;text-align:right">${dlbl}</td>
-      <td>${sb}</td>
+      <td>${badge}</td>
     </tr>`;
   }).join('');
 }
+
+async function loadSSLDebug() {
+  $('ssl-debug').style.display = 'block';
+  $('ssl-debug-msg').textContent = 'Fetching /api/ssl/debug …';
+  try {
+    const resp = await fetch('/api/ssl/debug');
+    const d    = await resp.json();
+    if (!resp.ok || d.error) {
+      $('ssl-debug-msg').textContent = 'Error: ' + (d.error || 'HTTP ' + resp.status);
+      return;
+    }
+    $('ssl-debug-msg').textContent = [
+      'Raw output bytes : ' + d.rawLength,
+      'Records found    : ' + d.recordCount + '  (split on delimiter: "' + d.delimiter + '")',
+      'Template used    : ' + d.template.slice(0, 120) + (d.template.length > 120 ? '…' : ''),
+      '',
+      'First ' + (d.sampleRecords || []).length + ' record samples (first 200 chars each):',
+      ...(d.sampleRecords || []).map((r, i) => `  [${i}] ${r}`),
+    ].join('\n');
+  } catch (e) {
+    $('ssl-debug-msg').textContent = 'Exception: ' + e.message;
+  }
+}
+// ═══════════════════════════════════════════════════════════════
 
 // ── NODE LIMITS TAB ────────────────────────────────────────────
 async function loadNL(force=false){

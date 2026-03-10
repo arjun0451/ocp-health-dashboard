@@ -28,7 +28,7 @@ const { loadIndex, loadRun } = require('../artifactStore');
 const { loadConfig, reloadConfig } = require('../configLoader');
 const { buildJSONReport, buildHTMLReport, generatePDF } = require('../reportGenerator');
 const { getDocs }          = require('../checks/checkDocs');
-const { getAllCertData }   = require('../checks/security');
+const { getAllCertData, getRawOCOutput } = require('../checks/security');
 const { getNodeLimitRows } = require('../checks/nodes');
 const { getPDBData }       = require('../checks/pdb');
 const logger = require('../logger');
@@ -125,24 +125,31 @@ router.get('/docs/:checkId', (req, res) => {
 });
 
 // ── SSL certs tab ─────────────────────────────────────────────────────────────
-// Returns ALL certs (not just expiring) with notBefore, notAfter, daysLeft.
-// Also returns stats: totalTLSFound, parsed, skippedNoCert, skippedParseErr, excluded, checked
+// Returns ALL certs with notBefore, notAfter, daysLeft + stats object.
+// Stats: totalTLSFound, parsed, skippedParseErr, excluded, checked, activeFilter
 router.get('/ssl/certs', async (req, res) => {
   try {
     const certs = await getAllCertData();
-    const stats = certs._stats || {
-      totalTLSFound: certs.length,
-      parsed: certs.length,
-      skippedNoCert: 0,
-      skippedParseErr: 0,
-      excluded: certs.filter(c => c.excluded).length,
-      checked: certs.filter(c => !c.excluded).length,
-    };
-    res.json({ certs, total: certs.length, stats });
+    const stats = certs._stats;
+    res.json({ certs: [...certs], total: certs.length, stats });
   } catch (e) {
-    logger.error(`SSL certs API error: ${e.message}`);
-    res.status(500).json({ error: e.message, certs: [], total: 0,
-      stats: { totalTLSFound: 0, parsed: 0, skippedNoCert: 0, skippedParseErr: 0, excluded: 0, checked: 0 } });
+    logger.error(`SSL certs API error: ${e.message}\n${e.stack}`);
+    res.status(500).json({
+      error: e.message,
+      certs: [], total: 0,
+      stats: { totalTLSFound: 0, parsed: 0, skippedParseErr: 0, excluded: 0, checked: 0 },
+    });
+  }
+});
+
+// ── SSL debug — shows raw oc output sample for troubleshooting ────────────────
+// GET /api/ssl/debug
+router.get('/ssl/debug', async (req, res) => {
+  try {
+    const info = await getRawOCOutput();
+    res.json(info);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

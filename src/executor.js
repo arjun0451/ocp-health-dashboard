@@ -193,31 +193,48 @@ kube-controller-manager-master-2   5/5   Running   0   2d`.trim(),
 }
 
 function buildMockSSLCerts() {
-  // Simulate go-template output: NAMESPACE\tNAME\tBASE64_CERT\n
-  // Build real minimal DER certs with UTCTime tags so the ASN.1 scanner works
-  function makeDER(nbYY, nbMM, nbDD, naYY, naMM, naDD) {
-    function utctime(yy, mm, dd) {
-      const s = String(yy).padStart(2, '0')
-              + String(mm).padStart(2, '0')
-              + String(dd).padStart(2, '0')
-              + '120000Z';
+  // Simulate EXACT go-template output using ||| delimiter:
+  //   "NS NAME BASE64_OF_PEM|||NS NAME BASE64_OF_PEM|||..."
+  //
+  // Kubernetes .data.tls.crt encoding chain:
+  //   DER bytes → PEM (base64 + headers) → base64(PEM) = what's stored
+  // go-template prints the stored value = base64(PEM_TEXT)
+  function makeSecretValue(nbYY, nbMM, nbDD, naYY, naMM, naDD) {
+    // Build minimal DER with correct UTCTime validity
+    function utctime(yr, mo, da) {
+      const yy = String(yr % 100).padStart(2, '0');
+      const s  = yy + String(mo).padStart(2,'0') + String(da).padStart(2,'0') + '120000Z';
       return Buffer.from([0x17, 0x0d, ...Buffer.from(s, 'ascii')]);
     }
-    return Buffer.concat([Buffer.alloc(30), utctime(nbYY,nbMM,nbDD), utctime(naYY,naMM,naDD), Buffer.alloc(30)]);
+    const nb       = utctime(nbYY, nbMM, nbDD);
+    const na       = utctime(naYY, naMM, naDD);
+    const validity = Buffer.concat([Buffer.from([0x30, nb.length + na.length]), nb, na]);
+    const der      = Buffer.concat([Buffer.alloc(60, 0xAA), validity, Buffer.alloc(20, 0xBB)]);
+    // PEM-encode (64-char line wrap, as openssl does)
+    const b64der = der.toString('base64').match(/.{1,64}/g).join('\n');
+    const pem    = '-----BEGIN CERTIFICATE-----\n' + b64der + '\n-----END CERTIFICATE-----\n';
+    // Outer base64 = what Kubernetes stores in .data.tls.crt
+    return Buffer.from(pem).toString('base64');
   }
-  const lines = [
-    // future certs
-    ['my-app',          'api-tls',          makeDER(23,1,1,  27,6,30)],
-    ['my-app',          'frontend-tls',     makeDER(23,6,1,  26,12,31)],
-    ['production',      'ingress-cert',     makeDER(24,1,1,  25,6,30)],
-    // expiring soon (< 30 days from mock perspective — set to 2025-03-15)
-    ['production',      'db-cert-expiring', makeDER(22,3,1,  25,3,15)],
-    // excluded ns
-    ['openshift-kube-apiserver', 'aggregator-client-signer', makeDER(24,1,1, 26,1,1)],
+
+  const rows = [
+    // [ns, name, nbYY,Mo,Da,  naYY,Mo,Da]
+    ['open-cluster-management-hub', 'registration-webhook-serving-cert', 2026,3,6,  2026,4,5],
+    ['open-cluster-management-hub', 'work-webhook-serving-cert',         2026,3,6,  2026,4,5],
+    ['openshift-compliance',        'result-client-cert-ocp4-cis',       2026,3,10, 2026,3,11],
+    ['openshift-compliance',        'result-server-cert-ocp4-cis',       2026,3,10, 2026,3,11],
+    ['openshift-kube-apiserver',    'aggregator-client',                  2026,3,3,  2026,4,1],
+    ['openshift-kube-apiserver',    'kubelet-client',                     2026,3,2,  2026,4,1],
+    ['my-app',                      'ingress-tls-cert',                   2024,1,1,  2027,6,30],
+    ['my-app',                      'api-serving-cert',                   2023,6,1,  2026,12,31],
+    ['production',                  'db-cert',                            2024,6,1,  2025,12,31],
+    ['monitoring',                  'grafana-tls',                        2024,1,1,  2028,1,1],
   ];
-  return lines.map(([ns, name, der]) =>
-    `${ns}\t${name}\t${der.toString('base64')}`
-  ).join('\n') + '\n';
+
+  return rows
+    .map(([ns, name, nbYY, nbMM, nbDD, naYY, naMM, naDD]) =>
+      `${ns} ${name} ${makeSecretValue(nbYY, nbMM, nbDD, naYY, naMM, naDD)}`)
+    .join('|||') + '|||';
 }
 
 function buildMockDescribeNode(name, cpuReq, cpuReqPct, cpuLim, cpuLimPct, memReq, memReqPct, memLim, memLimPct) {
