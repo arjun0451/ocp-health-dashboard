@@ -230,9 +230,112 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);font-size:14px
 .gfail{background:var(--warn-bg);border:1px solid #f1c21b;border-radius:var(--r);
   padding:9px 13px;font-size:13px;color:#5a3e00;margin-top:5px}
 
-/* empty */
-.empty{padding:46px 24px;text-align:center;color:var(--t3);
-  background:var(--surface);border:1px solid var(--bd);border-radius:var(--r)}
+/* ── Metrics tab ───────────────────────────────────────────────────────────── */
+/* Summary strip */
+.msum{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.msum-card{
+  background:var(--surface);border:1px solid var(--bd);border-radius:var(--r);
+  padding:12px 18px;flex:1;min-width:140px;
+  display:flex;flex-direction:column;gap:3px;position:relative;overflow:hidden
+}
+.msum-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--bd)}
+.msum-card.mc-red::before{background:var(--fail)}
+.msum-card.mc-orange::before{background:#f57c00}
+.msum-card.mc-green::before{background:var(--pass)}
+.msum-card.mc-blue::before{background:var(--blue)}
+.msc-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--t3)}
+.msc-val{font-size:26px;font-weight:700;font-family:var(--mono);line-height:1.1}
+.msc-val.mv-red{color:var(--fail)}
+.msc-val.mv-orange{color:#f57c00}
+.msc-val.mv-green{color:var(--pass)}
+.msc-sub{font-size:11px;color:var(--t3)}
+
+/* Group section */
+.mgroup{margin-bottom:22px}
+.mgroup-hdr{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 14px;
+  background:var(--sf2);border:1px solid var(--bd);
+  border-radius:var(--r) var(--r) 0 0;
+  cursor:pointer;user-select:none
+}
+.mgroup-hdr:hover{background:#ebebeb}
+.mgroup-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--t1)}
+.mgroup-body{border:1px solid var(--bd);border-top:none;border-radius:0 0 var(--r) var(--r);overflow:hidden}
+.mgroup-hdr.collapsed .mchev{transform:rotate(-90deg)}
+.mgroup-hdr.collapsed + .mgroup-body{display:none}
+.mchev{width:14px;height:14px;color:var(--t3);transition:transform .2s;flex-shrink:0}
+.mgroup-pills{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+/* Check tiles within a group */
+.mcheck-tile{background:var(--surface)}
+.mcheck-tile+.mcheck-tile{border-top:1px solid var(--bd)}
+.mcheck-hdr{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 14px 9px 18px;
+  background:var(--sf2);border-bottom:1px solid var(--bd);
+  cursor:pointer
+}
+.mcheck-hdr:hover{background:#ebebeb}
+.mcheck-title{font-size:13px;font-weight:600;color:var(--t1)}
+.mcheck-desc{font-size:11px;color:var(--t3);margin-left:4px}
+.mcheck-count{margin-left:auto;font-size:12px;font-weight:700;font-family:var(--mono)}
+.mcheck-count.mc-red{color:var(--fail)}
+.mcheck-count.mc-orange{color:#f57c00}
+.mcheck-count.mc-green{color:var(--pass)}
+.mcheck-count.mc-grey{color:var(--t3)}
+.mcheck-body{padding:0}
+.mcheck-hdr.collapsed .mchev2{transform:rotate(-90deg)}
+.mcheck-hdr.collapsed + .mcheck-body{display:none}
+.mchev2{width:12px;height:12px;color:var(--t3);transition:transform .2s;flex-shrink:0}
+
+/* Metrics data table */
+.mtbl{width:100%;border-collapse:collapse;table-layout:auto}
+.mtbl th{
+  padding:7px 14px;font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--t3);text-align:left;
+  background:#f8f8f8;border-bottom:1px solid var(--bd);white-space:nowrap
+}
+.mtbl td{
+  padding:7px 14px;font-size:12px;font-family:var(--mono);
+  border-bottom:1px solid #f0f0f0;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis
+}
+.mtbl tbody tr:last-child td{border-bottom:none}
+.mtbl tbody tr:hover{background:#fafafa}
+.mtbl td.mv-crit{color:var(--fail);font-weight:700}
+.mtbl td.mv-warn{color:#f57c00;font-weight:600}
+.mtbl td.mv-ok{color:var(--pass)}
+.mtbl td.mv-info{color:var(--blue)}
+.mno-data{padding:18px 14px;text-align:center;font-size:13px;color:var(--pass);
+  font-style:italic;background:var(--pass-bg)}
+.merr{padding:12px 14px;font-size:12px;color:var(--fail);background:var(--fail-bg);
+  font-family:var(--mono);border-top:1px solid #ffd7d9}
+
+/* Metrics toolbar */
+.mbar{
+  display:flex;align-items:center;gap:10px;margin-bottom:16px;
+  padding:10px 14px;background:var(--surface);border:1px solid var(--bd);
+  border-radius:var(--r);font-size:12px;color:var(--t3);flex-wrap:wrap
+}
+.mbar strong{color:var(--t1)}
+.mbar-sep{color:var(--bd2)}
+.mbar-err{color:var(--fail);font-weight:600}
+.mbtn-group{margin-left:auto;display:flex;gap:6px}
+
+/* threshold badge in toolbar */
+.thresh-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:10px;font-weight:700;padding:2px 7px;
+  border-radius:10px;background:var(--sf2);border:1px solid var(--bd);
+  color:var(--t2);font-family:var(--mono)
+}
+
+@media(max-width:700px){
+  .msum{flex-direction:column}
+  .msum-card{min-width:auto}
+}
+
 
 @media(max-width:900px){
   .guide-layout{grid-template-columns:1fr}
@@ -254,6 +357,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);font-size:14px
 
 <div class="tab-nav">
   <button class="tab-btn active" data-tab="overview"   onclick="sw('overview')">Overview <span class="tbadge" id="bf" style="display:none"></span></button>
+  <button class="tab-btn"        data-tab="metrics"    onclick="sw('metrics')">📊 Metrics <span class="tbadge" id="mf" style="display:none"></span></button>
   <button class="tab-btn"        data-tab="ssl"        onclick="sw('ssl')">SSL Certificates</button>
   <button class="tab-btn"        data-tab="nodelimits" onclick="sw('nodelimits')">Node Limits</button>
   <button class="tab-btn"        data-tab="pdb"        onclick="sw('pdb')">PDB Analysis</button>
@@ -288,6 +392,55 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);font-size:14px
       </div>
     </div>
     <div id="cats"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       METRICS TAB  —  Prometheus / Thanos live metrics
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-metrics">
+
+    <!-- Toolbar / info bar -->
+    <div class="mbar" id="m-bar">
+      <span>Querying <strong id="m-host">—</strong></span>
+      <span class="mbar-sep">│</span>
+      <span>Last fetched: <strong id="m-fetched">—</strong></span>
+      <span class="mbar-sep">│</span>
+      <span id="m-dur" style="color:var(--t3)"></span>
+      <span id="m-err" class="mbar-err" style="display:none"></span>
+      <div class="mbtn-group">
+        <button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="loadMetrics(true)">↻ Refresh</button>
+        <button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="toggleMThresh()">⚙ Thresholds</button>
+      </div>
+    </div>
+
+    <!-- Threshold summary panel (hidden by default, shown by ⚙ button) -->
+    <div id="m-thresh" style="display:none;margin-bottom:16px;padding:12px 16px;
+      background:#f0f4ff;border:1px solid #c5d0f0;border-radius:var(--r);font-size:12px">
+      <strong style="font-size:13px">Active Thresholds</strong>
+      <span style="font-size:11px;color:var(--t3);margin-left:8px">
+        (change via <code style="font-family:var(--mono);background:#e8eeff;padding:1px 4px;border-radius:3px">ocp-health-metrics-config</code> ConfigMap)
+      </span>
+      <div id="m-thresh-body" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
+
+    <!-- Summary violation strip -->
+    <div class="msum" id="m-sum">
+      <div class="msum-card mc-blue" style="min-width:180px">
+        <div class="msc-label">Status</div>
+        <div class="msc-val mv-blue" style="font-size:15px;margin-top:4px" id="m-status-msg">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Groups (rendered by JS) -->
+    <div id="m-groups">
+      <div style="padding:40px;text-align:center;color:var(--t3);
+        background:var(--surface);border:1px solid var(--bd);border-radius:var(--r)">
+        <div style="font-size:28px;margin-bottom:10px">📊</div>
+        <div style="font-size:14px;font-weight:500;margin-bottom:6px">Prometheus Metrics</div>
+        <div style="font-size:13px">Click the tab to load metrics from Thanos</div>
+      </div>
+    </div>
+
   </div>
 
   <!-- SSL CERTIFICATES TAB -->
@@ -483,6 +636,7 @@ let lastRunId=null, pollTmr=null, docsCache=null;
 let sslData=[], nlData=[], pdbData=[];
 let sslLoaded=false, nlLoaded=false, pdbLoaded=false;
 let sslStats=null;
+let metricsData=null, metricsLoaded=false;
 const SS={ssl:{col:'daysLeft',dir:1},nl:{col:'node',dir:1},pdb:{col:'color',dir:1}};
 const CMETA={
   control_plane:{label:'Control Plane',icon:'⚙️'},nodes:{label:'Nodes',icon:'🖥️'},
@@ -496,6 +650,7 @@ const CORD=['control_plane','nodes','pods','networking','storage','security','mo
 function sw(t){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+t));
+  if(t==='metrics')   loadMetrics();
   if(t==='ssl')       loadSSL();
   if(t==='nodelimits')loadNL();
   if(t==='pdb')       loadPDB();
@@ -599,7 +754,344 @@ function toggleDet(row, key){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SSL CERTIFICATES TAB
+// METRICS TAB — Prometheus / Thanos
+// ═══════════════════════════════════════════════════════════════
+// Data model from /api/metrics:
+//   { fetchedAt, durationMs, thanosHost, thresholds, groups: [
+//     { id, label, icon, checks: [
+//       { id, label, description, threshold, unit, cols, colKeys, rows, error }
+//     ]}
+//   ]}
+//
+// Row shape (varies by check):
+//   { namespace, pod, container, value, unit, valueDisplay, warn?, crit?, state?, severity? }
+//
+// Severity colouring rules per check:
+//   cpu_throttling  — always crit (already filtered to >= threshold)
+//   memory_usage    — always crit
+//   oom_killed      — always crit
+//   pvc_usage       — crit if >= 90%, warn if >= threshold
+//   node_filesystem — crit if >= 95%, warn if >= threshold
+//   etcd_db_size    — warn if row.warn === true
+//   etcd_rtt        — warn if row.warn === true
+//   active_alerts   — crit if severity=critical, warn if severity=warning
+// ═══════════════════════════════════════════════════════════════
+
+let mThreshVisible = false;
+
+function toggleMThresh() {
+  mThreshVisible = !mThreshVisible;
+  $('m-thresh').style.display = mThreshVisible ? 'block' : 'none';
+}
+
+// Determine cell class for a value in a given check
+function mCellClass(checkId, row, infoMode) {
+  // infoMode checks (etcd): colour based on warn flag set by backend
+  if (infoMode) {
+    return row.warn ? 'mv-warn' : 'mv-ok';
+  }
+  switch (checkId) {
+    case 'cpu_usage':
+    case 'memory_usage':
+    case 'oom_killed':
+      return 'mv-crit';
+    case 'pvc_usage':
+      return row.value >= 90 ? 'mv-crit' : 'mv-warn';
+    case 'node_filesystem':
+      return row.value >= 95 ? 'mv-crit' : 'mv-warn';
+    case 'etcd_db_size':
+    case 'etcd_rtt':
+      return row.warn ? 'mv-warn' : 'mv-ok';
+    case 'active_alerts':
+      return row.crit ? 'mv-crit' : row.warn ? 'mv-warn' : 'mv-info';
+    default:
+      return '';
+  }
+}
+
+// Group-level violation count colour
+function mGroupCountClass(count) {
+  if (count === 0) return 'mc-green';
+  return 'mc-red';
+}
+
+// Check-level count colour  
+function mCheckCountClass(checkId, count, rows, infoMode) {
+  if (infoMode) {
+    return rows.some(r => r.warn) ? 'mc-orange' : 'mc-green';
+  }
+  if (count === 0) return 'mc-green';
+  if (checkId === 'active_alerts') {
+    return rows.some(r => r.crit) ? 'mc-red' : 'mc-orange';
+  }
+  return 'mc-red';
+}
+
+function mCountLabel(checkId, count, infoMode) {
+  if (infoMode) {
+    return count === 0 ? '— no data' : `${count} instance${count !== 1 ? 's' : ''}`;
+  }
+  return count === 0
+    ? '✓ none'
+    : `${count} violation${count !== 1 ? 's' : ''}`;
+}
+
+// Build a single check's table HTML
+function renderMCheckTable(check) {
+  if (check.error) {
+    return `<div class="merr">⚠ Query error: ${esc(check.error)}</div>`;
+  }
+  if (!check.rows || check.rows.length === 0) {
+    // infoMode checks (etcd) have a different empty message
+    const okMsg = check.infoMode
+      ? '— No data returned from Thanos for this metric'
+      : `✅ ${check.emptyMsg || ('No violations — all values within threshold (' + check.threshold + (check.unit === '%' ? '%' : ' ' + check.unit) + ')')}`;
+    return `<div class="mno-data">${okMsg}</div>`;
+  }
+
+  // Build colgroup for precise column widths
+  const colgroup = check.colWidths
+    ? `<colgroup>${check.colWidths.map(w=>`<col style="width:${w}">`).join('')}</colgroup>`
+    : '';
+  const headers = check.cols.map(c => `<th>${esc(c)}</th>`).join('');
+  const rows = check.rows.map(row => {
+    const cls = mCellClass(check.id, row, check.infoMode);
+    const cells = check.colKeys.map((key, i) => {
+      const val = row[key] !== undefined ? row[key] : '—';
+      // Apply colour only to the last column (value/status column)
+      const cellCls = (i === check.colKeys.length - 1) ? cls : '';
+      return `<td class="${cellCls}">${esc(String(val))}</td>`;
+    }).join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+
+  return `<table class="mtbl">${colgroup}
+    <thead><tr>${headers}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// Build a full group section HTML
+function renderMGroup(group) {
+  const totalViolations = group.checks.reduce((s, c) => s + (c.rows ? c.rows.length : 0), 0);
+  const hasError        = group.checks.some(c => c.error);
+  const countCls        = hasError ? 'mc-orange' : mGroupCountClass(
+    group.checks.filter(c => !c.infoMode).reduce((s, c) => s + (c.rows ? c.rows.length : 0), 0)
+  );
+
+  const pillHtml = hasError
+    ? `<span class="pill ps">error</span>`
+    : totalViolations === 0
+      ? `<span class="pill pp">✓ ok</span>`
+      : `<span class="pill pf">${totalViolations}</span>`;
+
+  const chevSvg = `<svg class="mchev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+    <polyline points="4,6 8,10 12,6"/>
+  </svg>`;
+
+  const checksHtml = group.checks.map(check => {
+    const rowCount = check.rows ? check.rows.length : 0;
+    const ckCls    = mCheckCountClass(check.id, rowCount, check.rows || [], check.infoMode);
+    const ckLbl    = mCountLabel(check.id, rowCount, check.infoMode);
+    const ckChev   = `<svg class="mchev2" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="4,6 8,10 12,6"/>
+    </svg>`;
+    return `
+    <div class="mcheck-tile">
+      <div class="mcheck-hdr" onclick="toggleMCheck(this)">
+        ${ckChev}
+        <span class="mcheck-title">${esc(check.label)}</span>
+        <span class="mcheck-desc">${esc(check.description)}</span>
+        <span class="mcheck-count ${ckCls}">${esc(ckLbl)}</span>
+      </div>
+      <div class="mcheck-body">${renderMCheckTable(check)}</div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="mgroup" id="mgroup-${esc(group.id)}">
+    <div class="mgroup-hdr" onclick="toggleMGroup(this)">
+      ${chevSvg}
+      <span class="mgroup-title">${group.label}</span>
+      <div class="mgroup-pills">${pillHtml}</div>
+    </div>
+    <div class="mgroup-body">${checksHtml}</div>
+  </div>`;
+}
+
+function toggleMGroup(hdr) {
+  hdr.classList.toggle('collapsed');
+}
+function toggleMCheck(hdr) {
+  hdr.classList.toggle('collapsed');
+}
+
+// Build summary strip
+function renderMSummary(data) {
+  if (!data || !data.groups) return;
+
+  let totalCrit = 0, totalWarn = 0;
+  const groupStats = data.groups.map(g => {
+    let viol = 0, warn = 0;
+    g.checks.forEach(c => {
+      if (!c.rows) return;
+      if (c.infoMode) {
+        // infoMode checks (etcd): count warn rows only, never critical
+        c.rows.forEach(r => { if (r.warn) { warn++; totalWarn++; } });
+      } else if (c.id === 'active_alerts') {
+        c.rows.forEach(r => {
+          if (r.crit) { viol++; totalCrit++; }
+          else { warn++; totalWarn++; }
+        });
+      } else {
+        viol += c.rows.length; totalCrit += c.rows.length;
+      }
+    });
+    return { id: g.id, label: g.label, viol, warn };
+  });
+
+  // Overall status message
+  const statusEl = $('m-status-msg');
+  if (totalCrit === 0 && totalWarn === 0) {
+    statusEl.textContent = '✅ All checks within thresholds';
+    statusEl.style.color = 'var(--pass)';
+  } else if (totalCrit > 0) {
+    statusEl.textContent = `🔴 ${totalCrit} critical violation${totalCrit !== 1 ? 's' : ''}, ${totalWarn} warning${totalWarn !== 1 ? 's' : ''}`;
+    statusEl.style.color = 'var(--fail)';
+  } else {
+    statusEl.textContent = `🟠 ${totalWarn} warning${totalWarn !== 1 ? 's' : ''} — no critical violations`;
+    statusEl.style.color = '#f57c00';
+  }
+
+  // Update metrics badge in tab nav
+  const mf = $('mf');
+  const total = totalCrit + totalWarn;
+  mf.textContent = total;
+  mf.style.display = total > 0 ? 'inline' : 'none';
+
+  // Summary cards — one per group
+  const sumEl = $('m-sum');
+  sumEl.innerHTML = `
+    <div class="msum-card mc-blue" style="min-width:200px">
+      <div class="msc-label">Status</div>
+      <div class="msc-val" id="m-status-msg" style="font-size:14px;margin-top:4px;color:${
+        totalCrit > 0 ? 'var(--fail)' : totalWarn > 0 ? '#f57c00' : 'var(--pass)'
+      }">${
+        totalCrit > 0 ? `🔴 ${totalCrit} critical` : totalWarn > 0 ? `🟠 ${totalWarn} warnings` : '✅ Healthy'
+      }</div>
+      <div class="msc-sub">${data.durationMs}ms fetch</div>
+    </div>
+    ${groupStats.map(gs => `
+    <div class="msum-card ${gs.viol > 0 ? 'mc-red' : gs.warn > 0 ? 'mc-orange' : 'mc-green'}">
+      <div class="msc-label">${gs.label.replace(/^[^ ]+ /,'')}</div>
+      <div class="msc-val ${gs.viol > 0 ? 'mv-red' : gs.warn > 0 ? 'mv-orange' : 'mv-green'}">${
+        gs.viol + gs.warn
+      }</div>
+      <div class="msc-sub">${
+        gs.viol > 0 ? `${gs.viol} crit${gs.warn > 0 ? ` + ${gs.warn} warn` : ''}`
+        : gs.warn > 0 ? `${gs.warn} warning${gs.warn !== 1 ? 's' : ''}`
+        : 'within limits'
+      }</div>
+    </div>`).join('')}`;
+}
+
+// Render threshold badges panel
+function renderMThresh(thresholds) {
+  if (!thresholds) return;
+  const items = [
+    ['CPU Throttle',   thresholds.cpuThrottlePct  + '%',         'PROM_CPU_THROTTLE_THRESHOLD'],
+    ['Mem Usage',      thresholds.memThresholdPct  + '%',         'PROM_MEM_THRESHOLD'],
+    ['OOM Window',     thresholds.oomWindow,                      'PROM_OOM_WINDOW'],
+    ['Top N Pods',     String(thresholds.topN),                   'PROM_TOP_N'],
+    ['PVC Usage',      thresholds.pvcThresholdPct  + '%',         'PROM_PVC_THRESHOLD'],
+    ['Node FS Used',   thresholds.fsFreeThreshold  + '%',         'PROM_FS_FREE_THRESHOLD'],
+    ['etcd DB',        (thresholds.etcdDbBytes / 1024**3).toFixed(0) + ' GB', 'PROM_ETCD_DB_BYTES'],
+    ['etcd RTT',       thresholds.etcdRttMs        + ' ms',       'PROM_ETCD_RTT_MS'],
+    ['Alert Severity', thresholds.alertSeverities,                'PROM_ALERT_SEVERITIES'],
+  ];
+  $('m-thresh-body').innerHTML = items.map(([label, val, env]) =>
+    `<span class="thresh-badge" title="${esc(env)}">${esc(label)}: ${esc(val)}</span>`
+  ).join('');
+}
+
+// Main load function
+async function loadMetrics(force = false) {
+  if (metricsLoaded && !force) return;
+  metricsLoaded = true;
+
+  $('m-groups').innerHTML = `
+    <div style="padding:36px;text-align:center;color:var(--t3);
+      background:var(--surface);border:1px solid var(--bd);border-radius:var(--r)">
+      <div class="spn" style="width:20px;height:20px;border-top-color:var(--blue);
+        border-color:rgba(15,98,254,.2);margin:0 auto 12px"></div>
+      Querying Thanos…
+    </div>`;
+  $('m-err').style.display = 'none';
+
+  try {
+    const url  = '/api/metrics' + (force ? '?force=1' : '');
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      const msg = data.error || `HTTP ${resp.status}`;
+      $('m-err').textContent = '⚠ ' + msg;
+      $('m-err').style.display = 'inline';
+      $('m-groups').innerHTML = `
+        <div style="padding:28px 20px;background:var(--fail-bg);border:1px solid var(--fail);
+          border-radius:var(--r);font-size:13px;color:var(--fail)">
+          <strong>Failed to load metrics</strong><br>
+          <span style="font-family:var(--mono);font-size:11px;color:#333">${esc(msg)}</span>
+          <br><br>
+          <span style="font-size:12px;color:var(--t2)">
+            Verify <code style="font-family:var(--mono)">THANOS_HOST</code> is reachable and
+            <code style="font-family:var(--mono)">prometheus-k8s</code> ServiceAccount exists
+            in <code style="font-family:var(--mono)">openshift-monitoring</code>.
+          </span>
+        </div>`;
+      return;
+    }
+
+    metricsData = data;
+
+    // Update info bar
+    $('m-host').textContent    = data.thanosHost || '—';
+    $('m-fetched').textContent = data.fetchedAt
+      ? new Date(data.fetchedAt).toLocaleString() : '—';
+    $('m-dur').textContent     = data.durationMs ? `${data.durationMs}ms` : '';
+
+    // Render thresholds panel
+    renderMThresh(data.thresholds);
+
+    // Render summary cards
+    renderMSummary(data);
+
+    // Render groups
+    if (!data.groups || data.groups.length === 0) {
+      $('m-groups').innerHTML = `
+        <div style="padding:32px;text-align:center;color:var(--t3);
+          background:var(--surface);border:1px solid var(--bd);border-radius:var(--r)">
+          No metrics groups returned.
+        </div>`;
+      return;
+    }
+
+    $('m-groups').innerHTML = data.groups.map(renderMGroup).join('');
+
+  } catch (e) {
+    $('m-err').textContent = '⚠ Network error: ' + e.message;
+    $('m-err').style.display = 'inline';
+    $('m-groups').innerHTML = `
+      <div style="padding:28px 20px;background:var(--fail-bg);border:1px solid var(--fail);
+        border-radius:var(--r);font-size:13px;color:var(--fail)">
+        <strong>Network error</strong><br>
+        <span style="font-family:var(--mono);font-size:11px">${esc(e.message)}</span>
+      </div>`;
+  }
+}
+// ═══════════════════════════════════════════════════════════════
+
+
 // ═══════════════════════════════════════════════════════════════
 // Dropdown values:
 //   'expiring' — daysLeft < THRESH AND NOT excluded  (DEFAULT)
@@ -1025,7 +1517,7 @@ function startPoll(){
       clearInterval(pollTmr);
       $('notice').classList.remove('show');$('sdot').classList.remove('active');
       resetBtn();
-      sslLoaded=false;nlLoaded=false;pdbLoaded=false;
+      sslLoaded=false;nlLoaded=false;pdbLoaded=false;metricsLoaded=false;
       fetchOv();
     }
   },3000);

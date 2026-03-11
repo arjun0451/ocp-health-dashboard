@@ -205,7 +205,67 @@ data:
 
 ---
 # =============================================================================
-# 5b. ConfigMap — SSL namespace filter (ocp-health-ssl-config)
+# 5c. ConfigMap — Prometheus / Thanos metrics configuration
+#     All thresholds are configurable here. Restart the pod after changes.
+#
+#     Discovery (auto unless overridden):
+#       THANOS_HOST      — auto-discovered via: oc get route thanos-querier
+#                          -n openshift-monitoring -o jsonpath='{.spec.host}'
+#       METRICS_TOKEN_SA — ServiceAccount to create token for (default: prometheus-k8s)
+#       METRICS_TOKEN_NS — Namespace of the SA (default: openshift-monitoring)
+#
+#     Token:
+#       A short-lived token is created via `oc create token` and refreshed
+#       every 9 minutes. No long-lived token or secret required.
+#
+#     Cache:
+#       PROM_CACHE_SECS  — seconds to cache Thanos results (default: 300 = 5 min)
+#
+#     Thresholds:
+#       PROM_CPU_THRESHOLD           — % CPU usage vs limit to flag a pod (default: 90)
+#       PROM_MEM_THRESHOLD           — % memory limit to flag a pod (default: 80)
+#       PROM_OOM_WINDOW              — look-back window for OOMKilled (default: 1h)
+#       PROM_OOM_MIN_COUNT           — min OOMKill events to include (default: 1)
+#       PROM_TOP_N                   — top N pods to return per query (default: 10)
+#       PROM_PVC_THRESHOLD           — % PVC used to flag (default: 70)
+#       PROM_FS_USED_THRESHOLD        — flag node FS if used% exceeds this (default: 90, i.e. free% < 10)
+#       PROM_ETCD_DB_BYTES           — etcd DB bytes to flag (default: 8589934592 = 8 GB)
+#       PROM_ETCD_RTT_MS             — etcd peer RTT p99 ms to flag (default: 100)
+#       PROM_ALERT_SEVERITIES        — comma-separated severities to include (default: critical,warning)
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ocp-health-metrics-config
+  namespace: ocp-health-dashboard
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+data:
+  # ── Thanos discovery (leave blank for auto-discovery) ─────────────────────
+  THANOS_HOST:       ""
+  METRICS_TOKEN_SA:  "prometheus-k8s"
+  METRICS_TOKEN_NS:  "openshift-monitoring"
+  PROM_CACHE_SECS:   "300"
+
+  # ── Compute thresholds ────────────────────────────────────────────────────
+  PROM_CPU_THRESHOLD:           "90"    # flag pods with CPU usage >= 90% of their CPU limit
+  PROM_MEM_THRESHOLD:           "80"
+  PROM_OOM_WINDOW:              "1h"
+  PROM_OOM_MIN_COUNT:           "1"
+  PROM_TOP_N:                   "10"
+
+  # ── Storage thresholds ────────────────────────────────────────────────────
+  PROM_PVC_THRESHOLD:           "70"    # flag PVCs using > 70% capacity
+  PROM_FS_USED_THRESHOLD:       "90"    # flag filesystems with used% > 90% (i.e. free% < 10%)
+
+  # ── etcd thresholds ───────────────────────────────────────────────────────
+  PROM_ETCD_DB_BYTES:           "8589934592"   # 8 GB
+  PROM_ETCD_RTT_MS:             "100"
+
+  # ── Alert filter ──────────────────────────────────────────────────────────
+  PROM_ALERT_SEVERITIES:        "critical,warning"
+
+
 #     Controls which namespaces are EXCLUDED or INCLUDED in the SSL cert check.
 #
 #     SSL_EXCLUDE_NAMESPACES: comma-separated namespaces to skip (blacklist).
@@ -310,6 +370,8 @@ spec:
                 name: ocp-health-config
             - configMapRef:
                 name: ocp-health-ssl-config
+            - configMapRef:
+                name: ocp-health-metrics-config
 
           # ── Mount the checks-config YAML ────────────────────────────────
           env:

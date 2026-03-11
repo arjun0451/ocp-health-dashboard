@@ -29,6 +29,7 @@ const { loadConfig, reloadConfig } = require('../configLoader');
 const { buildJSONReport, buildHTMLReport, generatePDF } = require('../reportGenerator');
 const { getDocs }          = require('../checks/checkDocs');
 const { getAllCertData, getRawOCOutput } = require('../checks/security');
+const { getAllMetrics, getMockMetrics }  = require('../checks/prometheus');
 const { getNodeLimitRows } = require('../checks/nodes');
 const { getPDBData }       = require('../checks/pdb');
 const logger = require('../logger');
@@ -186,4 +187,24 @@ router.get('/pdb', async (req, res) => {
   }
 });
 
+// ── Prometheus metrics tab ────────────────────────────────────────────────────
+// GET /api/metrics          — full metrics payload (cached PROM_CACHE_SECS)
+// GET /api/metrics?force=1  — bypass cache, re-query Thanos now
+router.get('/metrics', async (req, res) => {
+  try {
+    const isMock = process.env.MOCK_MODE === 'true';
+    const force  = req.query.force === '1' || req.query.force === 'true';
+    const data   = isMock ? getMockMetrics() : await getAllMetrics(force);
+    res.json(data);
+  } catch (e) {
+    logger.error(`Metrics API error: ${e.message}\n${e.stack}`);
+    res.status(500).json({
+      error:     e.message,
+      fetchedAt: new Date().toISOString(),
+      groups:    [],
+    });
+  }
+});
+
 module.exports = router;
+
