@@ -128,10 +128,12 @@ async function checkPVCUsage(host,token,thresh){
     .map(r=>({...r,valueDisplay:r.value.toFixed(1)+'%',unit:'%'}));
 }
 
-// 5. Node filesystem — user-supplied PromQL (free% < 100-threshold, excludes ibmc-s3fs & read-only)
+// 5. Node filesystem — root mount only (mountpoint="/"), excludes ibmc-s3fs & read-only
 async function checkNodeFilesystem(host,token,fsUsedThresh){
   const freePct=100-fsUsedThresh;
-  const q=`((node_filesystem_avail_bytes{fstype!="",job="node-exporter",mountpoint!~"/var/lib/ibmc-s3fs.*"}/node_filesystem_size_bytes{fstype!="",job="node-exporter",mountpoint!~"/var/lib/ibmc-s3fs.*"}*100)<${freePct})and node_filesystem_readonly{fstype!="",job="node-exporter",mountpoint!~"/var/lib/ibmc-s3fs.*"}==0`;
+  // mountpoint="/" added to all three metric selectors so only the root filesystem is checked.
+  // This prevents spurious alerts from overlay/container/tmpfs mounts on every node.
+  const q=`((node_filesystem_avail_bytes{fstype!="",job="node-exporter",mountpoint="/",mountpoint!~"/var/lib/ibmc-s3fs.*"}/node_filesystem_size_bytes{fstype!="",job="node-exporter",mountpoint="/",mountpoint!~"/var/lib/ibmc-s3fs.*"}*100)<${freePct})and node_filesystem_readonly{fstype!="",job="node-exporter",mountpoint="/",mountpoint!~"/var/lib/ibmc-s3fs.*"}==0`;
   const raw=await promQuery(host,token,q);
   return raw
     .map(r=>{const fp=parseFloat(r.value[1]);return{instance:r.metric.instance||'—',mountpoint:r.metric.mountpoint||'—',device:r.metric.device||'—',fstype:r.metric.fstype||'—',freePct:fp,value:100-fp};})
@@ -237,9 +239,9 @@ async function getAllMetrics(force=false){
          cols:['Namespace','PVC Name','Used %'],colKeys:['namespace','pvc','valueDisplay'],colWidths:['28%','52%','20%'],
          rows:pvc.rows,error:pvc.error},
         {id:'node_filesystem',label:'Node Filesystem Usage',
-         description:`Filesystems with used% > ${T.fsUsedThreshold}% (excludes ibmc-s3fs, read-only)`,
+         description:`Root filesystem (mountpoint="/") with used% > ${T.fsUsedThreshold}% (excludes ibmc-s3fs, read-only)`,
          configKey:'PROM_FS_USED_THRESHOLD',threshold:T.fsUsedThreshold,unit:'% used',
-         emptyMsg:`No filesystems with used% > ${T.fsUsedThreshold}%`,
+         emptyMsg:`Root filesystem (/) used% ≤ ${T.fsUsedThreshold}% on all nodes`,
          cols:['Node Instance','Mountpoint','Device','FS Type','Used %'],colKeys:['instance','mountpoint','device','fstype','valueDisplay'],colWidths:['22%','28%','16%','12%','12%'],
          rows:fs.rows,error:fs.error},
       ]},
@@ -312,12 +314,12 @@ function getMockMetrics(){
                {namespace:'logging',pvc:'elasticsearch-data-0',value:77.6,valueDisplay:'77.6%',unit:'%'},
                {namespace:'production',pvc:'mysql-data-pvc',value:73.1,valueDisplay:'73.1%',unit:'%'}],error:null},
         {id:'node_filesystem',label:'Node Filesystem Usage',
-         description:`Filesystems with used% > ${T.fsUsedThreshold}% (excludes ibmc-s3fs, read-only)`,
+         description:`Root filesystem (mountpoint="/") with used% > ${T.fsUsedThreshold}% (excludes ibmc-s3fs, read-only)`,
          configKey:'PROM_FS_USED_THRESHOLD',threshold:T.fsUsedThreshold,unit:'% used',
-         emptyMsg:`No filesystems with used% > ${T.fsUsedThreshold}%`,
+         emptyMsg:`Root filesystem (/) used% ≤ ${T.fsUsedThreshold}% on all nodes`,
          cols:['Node Instance','Mountpoint','Device','FS Type','Used %'],colKeys:['instance','mountpoint','device','fstype','valueDisplay'],colWidths:['22%','28%','16%','12%','12%'],
-         rows:[{instance:'worker-2:9100',mountpoint:'/var/lib/containers',device:'/dev/sda3',fstype:'xfs',freePct:6.6,value:93.4,valueDisplay:'93.4%',unit:'% used'},
-               {instance:'worker-5:9100',mountpoint:'/var/log',device:'/dev/sdb1',fstype:'ext4',freePct:8.1,value:91.9,valueDisplay:'91.9%',unit:'% used'}],error:null},
+         rows:[{instance:'worker-2:9100',mountpoint:'/',device:'/dev/sda1',fstype:'xfs',freePct:6.6,value:93.4,valueDisplay:'93.4%',unit:'% used'},
+               {instance:'worker-5:9100',mountpoint:'/',device:'/dev/sda1',fstype:'xfs',freePct:8.1,value:91.9,valueDisplay:'91.9%',unit:'% used'}],error:null},
       ]},
       {id:'etcd',label:'etcd',icon:'🗃',checks:[
         {id:'etcd_db_size',label:'etcd Database Size',

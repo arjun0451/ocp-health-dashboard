@@ -30,6 +30,7 @@ const { buildJSONReport, buildHTMLReport, generatePDF } = require('../reportGene
 const { getDocs }          = require('../checks/checkDocs');
 const { getAllCertData, getRawOCOutput } = require('../checks/security');
 const { getAllMetrics, getMockMetrics }  = require('../checks/prometheus');
+const { getAllQuotaData, getMockQuotaData } = require('../checks/resourcequota');
 const { getNodeLimitRows } = require('../checks/nodes');
 const { getPDBData }       = require('../checks/pdb');
 const logger = require('../logger');
@@ -203,6 +204,21 @@ router.get('/metrics', async (req, res) => {
       fetchedAt: new Date().toISOString(),
       groups:    [],
     });
+  }
+});
+
+// ── Resource Quota / Cluster Allocation tab ───────────────────────────────
+// GET /api/quota          — full report (cached 5 min)
+// GET /api/quota?force=1  — bypass cache
+router.get('/quota', async (req, res) => {
+  try {
+    const isMock = process.env.MOCK_MODE === 'true';
+    const force  = req.query.force === '1' || req.query.force === 'true';
+    const data   = isMock ? getMockQuotaData() : await getAllQuotaData(force);
+    res.json(data);
+  } catch (e) {
+    logger.error(`Quota API error: ${e.message}\n${e.stack}`);
+    res.status(500).json({ error: e.message, nodeRows: [], quotaRows: [], summary: null });
   }
 });
 

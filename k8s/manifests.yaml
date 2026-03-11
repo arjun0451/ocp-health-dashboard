@@ -23,14 +23,117 @@ metadata:
 
 ---
 # =============================================================================
-# 3. ClusterRoleBinding — cluster-admin for full health check access
-#    Required to: query nodes, all pods, secrets, PVCs, clusteroperators,
-#    clusterversions, machineconfigpools, and run oc adm top nodes.
+# 3. RBAC — Minimum-privilege roles  (replaces cluster-admin)
+#
+# SECURITY DESIGN RATIONALE
+# ─────────────────────────
+# cluster-admin was used previously because it was the simplest path. In
+# production that violates the principle of least privilege. The dashboard
+# performs almost entirely READ operations. The only write operation is
+# `oc create token` — a single, scoped, time-limited token creation in the
+# openshift-monitoring namespace.
+#
+# The approach below uses THREE RBAC objects instead of cluster-admin:
+#
+#  A. ocp-health-reader  (ClusterRole)
+#     Read-only access to the cluster-scoped and cross-namespace resources
+#     the dashboard actually queries.  No write permissions.
+#
+#  B. ocp-health-clusterrole-binding  (ClusterRoleBinding)
+#     Binds the ClusterRole above to the ServiceAccount.
+#
+#  C. ocp-health-token-creator  (Role, namespace: openshift-monitoring)
+#     Grants ONLY `create` on `serviceaccounts/token` for prometheus-k8s.
+#     This is the single write the dashboard needs for Thanos auth.
+#     Scoped to one namespace and one sub-resource — not cluster-wide.
+#
+#  D. ocp-health-token-creator-binding  (RoleBinding, openshift-monitoring)
+#     Binds C above.
+#
+# WHAT IS STILL READ-ONLY?
+# ─────────────────────────
+# • clusteroperators, clusterversions, machineconfigpools   (config / mco APIs)
+# • nodes, pods, secrets, pvcs, resourcequotas              (core API)
+# • poddisruptionbudgets                                    (policy API)
+# • routes                                                  (route.openshift.io)
+# • namespaces                                              (core API)
+# • pods/exec (etcd health check only)                      (core API sub-resource)
+# • nodes/metrics (oc adm top nodes)                        (metrics.k8s.io)
+#
+# WHAT IS cluster-admin ABSOLUTELY MANDATORY FOR?
+# ─────────────────────────────────────────────────
+# Nothing — the custom role below covers every operation the dashboard uses.
+# If you later add checks that require write access (e.g., remediations),
+# re-evaluate and scope them as additional Roles in specific namespaces.
+#
+# HOW TO SWITCH FROM cluster-admin
+# ──────────────────────────────────
+# 1. Delete the old ClusterRoleBinding:
+#      oc delete clusterrolebinding ocp-health-dashboard-cluster-admin
+# 2. Apply this manifest section:
+#      oc apply -f k8s/manifests.yaml
 # =============================================================================
+
+# ── A. Minimum-privilege ClusterRole ─────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ocp-health-reader
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+rules:
+  # ── Core API (v1) ────────────────────────────────────────────────────────
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - namespaces
+      - pods
+      - persistentvolumeclaims
+      - secrets
+      - resourcequotas
+      - serviceaccounts
+    verbs: ["get", "list"]
+
+  # pods/exec — needed only for etcd health check
+  # (`oc exec etcdctl endpoint health --cluster` in openshift-etcd)
+  # If you disable the etcd_health check, remove this rule.
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+
+  # ── Metrics API — required for `oc adm top nodes` ─────────────────────
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+
+  # ── Policy API — PodDisruptionBudgets ──────────────────────────────────
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list"]
+
+  # ── OpenShift config APIs ──────────────────────────────────────────────
+  - apiGroups: ["config.openshift.io"]
+    resources:
+      - clusteroperators
+      - clusterversions
+    verbs: ["get", "list"]
+
+  # ── MachineConfig operator ─────────────────────────────────────────────
+  - apiGroups: ["machineconfiguration.openshift.io"]
+    resources: ["machineconfigpools"]
+    verbs: ["get", "list"]
+
+  # ── Routes (Thanos host discovery, console URL) ────────────────────────
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs: ["get", "list"]
+
+---
+# ── B. Bind ClusterRole to the ServiceAccount ────────────────────────────
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: ocp-health-dashboard-cluster-admin
+  name: ocp-health-reader-binding
   labels:
     app.kubernetes.io/name: ocp-health-dashboard
 subjects:
@@ -39,7 +142,42 @@ subjects:
     namespace: ocp-health-dashboard
 roleRef:
   kind: ClusterRole
-  name: cluster-admin
+  name: ocp-health-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ── C. Scoped Role — token creation for Thanos auth (openshift-monitoring)
+# This is the ONLY write permission the dashboard requires and it is
+# deliberately confined to one namespace and one sub-resource.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ocp-health-token-creator
+  namespace: openshift-monitoring
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: ["prometheus-k8s"]   # ← scoped to only this SA
+    verbs: ["create"]
+
+---
+# ── D. Bind the Role to the ServiceAccount ───────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ocp-health-token-creator-binding
+  namespace: openshift-monitoring
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+subjects:
+  - kind: ServiceAccount
+    name: ocp-health-sa
+    namespace: ocp-health-dashboard
+roleRef:
+  kind: Role
+  name: ocp-health-token-creator
   apiGroup: rbac.authorization.k8s.io
 
 ---
@@ -265,6 +403,38 @@ data:
   # ── Alert filter ──────────────────────────────────────────────────────────
   PROM_ALERT_SEVERITIES:        "critical,warning"
 
+---
+# =============================================================================
+# 5d. ConfigMap — Resource Quota / Cluster Allocation configuration
+#
+#     RQ_SKIP_NAMESPACES  — comma-separated prefixes of namespaces to exclude
+#                           from the ResourceQuota report.
+#                           Default: openshift-,kube-,default
+#
+#     STORAGE CLASS COLUMNS ARE AUTO-DISCOVERED — NO CONFIG NEEDED
+#     ─────────────────────────────────────────────────────────────
+#     The dashboard scans all ResourceQuota .spec.hard keys for the pattern:
+#       <scname>.storageclass.storage.k8s.io/requests.storage
+#       <scname>.storageclass.storage.k8s.io/persistentvolumeclaims
+#     Every unique SC name found across all quotas becomes a column group
+#     (two sub-columns: Storage GiB + PVC count).
+#
+#     To onboard a new storage class:
+#       1. Add the SC to your ResourceQuota definition as normal
+#       2. Click "↻ Refresh" in the Cluster Allocation tab (or wait for cache)
+#       3. The new SC columns appear automatically — no dashboard changes needed
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ocp-health-rq-config
+  namespace: ocp-health-dashboard
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+data:
+  # Namespace prefixes to exclude from the ResourceQuota report (platform namespaces).
+  # Add your own namespace prefixes here, comma-separated.
+  RQ_SKIP_NAMESPACES: "openshift-,kube-,default"
 
 #     Controls which namespaces are EXCLUDED or INCLUDED in the SSL cert check.
 #
@@ -372,6 +542,8 @@ spec:
                 name: ocp-health-ssl-config
             - configMapRef:
                 name: ocp-health-metrics-config
+            - configMapRef:
+                name: ocp-health-rq-config
 
           # ── Mount the checks-config YAML ────────────────────────────────
           env:

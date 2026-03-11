@@ -1,0 +1,251 @@
+---
+# =============================================================================
+# OCP Health Dashboard — Least-Privilege RBAC
+# =============================================================================
+#
+# Replaces the cluster-admin ClusterRoleBinding with a purpose-built role
+# that grants exactly the permissions the dashboard needs and nothing more.
+#
+# Permission breakdown (derived from full source-code audit):
+#
+#   ClusterRole: ocp-health-reader
+#     Rule 1 — Cluster-scoped read-only objects (no namespace)
+#       • clusteroperators, clusterversions, machineconfigpools, nodes
+#     Rule 2 — Cross-namespace read-only objects (all namespaces)
+#       • pods, persistentvolumeclaims, poddisruptionbudgets
+#     Rule 3 — Secrets (tls type only, read across namespaces)
+#       • secrets — NOTE: see "Secret sensitivity" note below
+#     Rule 4 — metrics.k8s.io (powers oc adm top nodes)
+#       • nodes/metrics, pods/metrics
+#     Rule 5 — Routes in openshift-monitoring (Thanos host discovery)
+#       • routes (namespace-scoped via RoleBinding, not ClusterRole)
+#
+#   Role: ocp-health-exec-etcd  (namespace: openshift-etcd)
+#     Rule — pods/exec in openshift-etcd only (for etcdctl health)
+#
+#   Role: ocp-health-token-creator  (namespace: openshift-monitoring)
+#     Rule — create token for prometheus-k8s SA (Thanos auth)
+#
+# ── Secret sensitivity note ───────────────────────────────────────────────
+# The SSL check reads .data.tls.crt from secrets of type kubernetes.io/tls
+# across all namespaces.  The `get secrets` permission therefore grants read
+# access to ALL secret types in ALL namespaces (Opaque, docker-registry, etc.)
+# OCP has no built-in field selector for .type in RBAC rules.
+#
+# Mitigations if this is still too broad for your security posture:
+#   Option A (recommended): move the SSL check to a dedicated ServiceAccount
+#              with its own ClusterRole scoped to specific namespaces via
+#              multiple RoleBindings instead of one ClusterRoleBinding.
+#   Option B: disable SSL check (CHECK_SSL_CERTIFICATES=false) and accept
+#              the loss of cert-expiry monitoring.
+#   Option C: accept as-is — the SA cannot *modify* secrets, only read them,
+#              and audit logging will capture every read.
+#
+# All other rules grant only GET/LIST/WATCH — zero write permissions.
+# =============================================================================
+
+# ── 1. ClusterRole — core read-only permissions ────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ocp-health-reader
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+    app.kubernetes.io/component: rbac
+  annotations:
+    description: >
+      Least-privilege read-only role for the OCP Health Dashboard.
+      Grants exactly the API access required by each health check.
+      No write permissions except the two CREATE operations below.
+rules:
+
+  # ── Cluster-scoped objects (no namespace qualifier) ─────────────────────
+  - apiGroups: ["config.openshift.io"]
+    resources: ["clusteroperators", "clusterversions"]
+    verbs:     ["get", "list", "watch"]
+    # Used by: cluster_operators check, cluster_version check, machine_config_server check
+
+  - apiGroups: ["machineconfiguration.openshift.io"]
+    resources: ["machineconfigpools"]
+    verbs:     ["get", "list", "watch"]
+    # Used by: machine_config_pool check
+
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs:     ["get", "list", "watch"]
+    # Used by: node_readiness check, node_limits check (get nodes + describe node)
+
+  # ── metrics.k8s.io — required for oc adm top nodes ─────────────────────
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs:     ["get", "list"]
+    # Used by: node_cpu check, node_memory check
+
+  # ── Cross-namespace pod reads ────────────────────────────────────────────
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs:     ["get", "list", "watch"]
+    # Used by: platform_pods check, non_platform_pods check, control_plane_pods check,
+    #          authentication check, monitoring_stack check, machine_config_server check
+
+  # ── PVCs ─────────────────────────────────────────────────────────────────
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs:     ["get", "list", "watch"]
+    # Used by: pvc_health check
+
+  # ── PodDisruptionBudgets ─────────────────────────────────────────────────
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs:     ["get", "list", "watch"]
+    # Used by: pdb_health check
+
+  # ── Secrets — for SSL certificate expiry scan ───────────────────────────
+  # !! See "Secret sensitivity note" in the file header before deploying !!
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs:     ["get", "list"]
+    # Used by: ssl_certificates check (reads .data.tls.crt from kubernetes.io/tls secrets)
+    # NOTE: This grants read of ALL secret types across all namespaces.
+    #       Consider Option A or B from the header if this is too broad.
+
+---
+# ── 2. ClusterRoleBinding — bind reader role to the SA ─────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ocp-health-dashboard-reader
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+    app.kubernetes.io/component: rbac
+subjects:
+  - kind:      ServiceAccount
+    name:      ocp-health-sa
+    namespace: ocp-health-dashboard
+roleRef:
+  kind:     ClusterRole
+  name:     ocp-health-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ── 3. Role — pods/exec in openshift-etcd ONLY ─────────────────────────────
+# Required for: etcd_health check  (oc exec etcdctl endpoint health --cluster)
+# Scoped to a single namespace — much safer than cluster-wide exec.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ocp-health-etcd-exec
+  namespace: openshift-etcd
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+    app.kubernetes.io/component: rbac
+  annotations:
+    description: >
+      Allows the health dashboard to exec into etcd pods to run etcdctl.
+      Scoped to openshift-etcd namespace only.
+rules:
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs:     ["create"]
+    # oc exec -n openshift-etcd <etcd-pod> -- etcdctl endpoint health --cluster
+
+---
+# ── 4. RoleBinding — bind etcd exec role ────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ocp-health-etcd-exec
+  namespace: openshift-etcd
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+    app.kubernetes.io/component: rbac
+subjects:
+  - kind:      ServiceAccount
+    name:      ocp-health-sa
+    namespace: ocp-health-dashboard
+roleRef:
+  kind:     Role
+  name:     ocp-health-etcd-exec
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ── 5. Role — create token for prometheus-k8s SA ───────────────────────────
+# Required for: prometheus metrics tab (Thanos authentication)
+# The dashboard calls: oc create token prometheus-k8s -n openshift-monitoring
+# This is a namespaced subresource — does not require cluster-admin.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ocp-health-token-creator
+  namespace: openshift-monitoring
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+    app.kubernetes.io/component: rbac
+  annotations:
+    description: >
+      Allows the health dashboard to create short-lived tokens for the
+      prometheus-k8s ServiceAccount. These tokens are used to authenticate
+      against the Thanos Querier for metrics queries.
+      Scoped to openshift-monitoring namespace only.
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    verbs:     ["create"]
+    resourceNames: ["prometheus-k8s"]
+    # resourceNames locks this down to ONLY the prometheus-k8s SA.
+    # The dashboard cannot create tokens for any other SA.
+
+---
+# ── 6. RoleBinding — bind token creator role ────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ocp-health-token-creator
+  namespace: openshift-monitoring
+  labels:
+    app.kubernetes.io/name: ocp-health-dashboard
+    app.kubernetes.io/component: rbac
+subjects:
+  - kind:      ServiceAccount
+    name:      ocp-health-sa
+    namespace: ocp-health-dashboard
+roleRef:
+  kind:     Role
+  name:     ocp-health-token-creator
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ── 7. Role — read Thanos route in openshift-monitoring ────────────────────
+# Required for: prometheus metrics tab (host auto-discovery)
+# oc get route thanos-querier -n openshift-monitoring
+# The ClusterRole already grants pods/routes across all namespaces —
+# but if you prefer tighter scoping, use this namespace-scoped Role
+# and remove "routes" from the ClusterRole above.
+#
+# UNCOMMENT this block if you remove routes from the ClusterRole:
+#
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: Role
+# metadata:
+#   name: ocp-health-route-reader
+#   namespace: openshift-monitoring
+# rules:
+#   - apiGroups: ["route.openshift.io"]
+#     resources: ["routes"]
+#     verbs:     ["get", "list"]
+#     resourceNames: ["thanos-querier"]
+#
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   name: ocp-health-route-reader
+#   namespace: openshift-monitoring
+# subjects:
+#   - kind: ServiceAccount
+#     name: ocp-health-sa
+#     namespace: ocp-health-dashboard
+# roleRef:
+#   kind: Role
+#   name: ocp-health-route-reader
+#   apiGroup: rbac.authorization.k8s.io

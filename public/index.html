@@ -341,6 +341,64 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);font-size:14px
   .guide-layout{grid-template-columns:1fr}
   .gsb{position:static}
 }
+
+/* ── Resource Quota / Cluster Allocation tab ───────────────────────────── */
+.rq-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:20px}
+.rq-card{background:var(--surface);border:1px solid var(--bd);border-radius:var(--r);
+  padding:12px 16px;position:relative;overflow:hidden}
+.rq-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--bd)}
+.rq-card.rqc-red::before{background:var(--fail)}
+.rq-card.rqc-orange::before{background:#f57c00}
+.rq-card.rqc-green::before{background:var(--pass)}
+.rq-card.rqc-blue::before{background:var(--blue)}
+.rq-card.rqc-grey::before{background:var(--t3)}
+.rqc-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--t3);margin-bottom:3px}
+.rqc-val{font-size:22px;font-weight:700;font-family:var(--mono);line-height:1.1}
+.rqc-val.rv-red{color:var(--fail)}.rqc-val.rv-orange{color:#f57c00}
+.rqc-val.rv-green{color:var(--pass)}.rqc-val.rv-blue{color:var(--blue)}
+.rqc-sub{font-size:11px;color:var(--t3);margin-top:2px}
+.util-bar{height:6px;border-radius:3px;background:var(--bd);margin-top:5px;overflow:hidden}
+.util-fill{height:100%;border-radius:3px;transition:width .4s ease}
+.util-fill.uf-green{background:var(--pass)}.util-fill.uf-orange{background:#f57c00}.util-fill.uf-red{background:var(--fail)}
+.rq-sec-hdr{display:flex;align-items:center;gap:10px;padding:8px 14px;
+  background:var(--sf2);border:1px solid var(--bd);border-radius:var(--r) var(--r) 0 0;
+  margin-top:20px;cursor:pointer;user-select:none}
+.rq-sec-hdr:hover{background:#ebebeb}
+.rq-sec-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--t2)}
+.rq-sec-hdr.collapsed .mchev{transform:rotate(-90deg)}
+.rq-sec-hdr.collapsed + .rq-sec-body{display:none}
+.rq-sec-body{border:1px solid var(--bd);border-top:none;border-radius:0 0 var(--r) var(--r);overflow:hidden;margin-bottom:4px}
+.rq-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;
+  padding:9px 14px;background:var(--surface);border:1px solid var(--bd);
+  border-radius:var(--r);font-size:12px;color:var(--t3);flex-wrap:wrap}
+.rq-bar strong{color:var(--t1)}.rq-bar-sep{color:var(--bd2)}
+.rq-bar-r{margin-left:auto;display:flex;gap:6px;align-items:center}
+.rq-filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.rq-filters input{font-family:var(--mono);font-size:13px;padding:5px 9px;
+  border:1px solid var(--bd2);border-radius:var(--r);background:var(--surface);
+  color:var(--t1);width:200px}
+.rq-filters input:focus{outline:2px solid var(--blue);outline-offset:-1px}
+.rq-filters select{font-size:13px;padding:5px 8px;border:1px solid var(--bd2);
+  border-radius:var(--r);background:var(--surface);color:var(--t1)}
+.rq-count{font-size:12px;color:var(--t3);margin-left:4px}
+.rqtbl{width:100%;border-collapse:collapse;table-layout:auto}
+.rqtbl th{padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--t3);background:var(--sf2);border-bottom:1px solid var(--bd);
+  text-align:left;white-space:nowrap;cursor:pointer;user-select:none}
+.rqtbl th:hover{background:#ebebeb;color:var(--t1)}
+.rqtbl th .sa{margin-left:2px;opacity:.35;font-size:10px}.rqtbl th.sorted .sa{opacity:1}
+.rqtbl td{padding:7px 12px;font-size:12px;font-family:var(--mono);
+  border-bottom:1px solid #f0f0f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rqtbl tbody tr:last-child td{border-bottom:none}
+.rqtbl tbody tr:hover{background:#fafafa}
+.rqtbl td.rq-ns{font-size:12px;font-weight:600;color:var(--t1);font-family:var(--font)}
+.rqtbl td.rq-no-quota{font-style:italic;color:var(--t3)}
+.rqtbl td.rq-zero{color:var(--t3)}.rqtbl td.rq-high{color:var(--fail);font-weight:700}
+.node-role-master{color:var(--blue);font-weight:600}
+.node-role-worker{color:var(--pass);font-weight:600}
+.node-status-nr{color:var(--fail)}
+@media(max-width:700px){.rq-sum{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -357,10 +415,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);font-size:14px
 
 <div class="tab-nav">
   <button class="tab-btn active" data-tab="overview"   onclick="sw('overview')">Overview <span class="tbadge" id="bf" style="display:none"></span></button>
-  <button class="tab-btn"        data-tab="metrics"    onclick="sw('metrics')">📊 Metrics <span class="tbadge" id="mf" style="display:none"></span></button>
+  <button class="tab-btn"        data-tab="metrics"    onclick="sw('metrics')">Metrics <span class="tbadge" id="mf" style="display:none"></span></button>
   <button class="tab-btn"        data-tab="ssl"        onclick="sw('ssl')">SSL Certificates</button>
   <button class="tab-btn"        data-tab="nodelimits" onclick="sw('nodelimits')">Node Limits</button>
   <button class="tab-btn"        data-tab="pdb"        onclick="sw('pdb')">PDB Analysis</button>
+  <button class="tab-btn"        data-tab="quota"      onclick="sw('quota')">Cluster Allocation</button>
   <button class="tab-btn"        data-tab="history"    onclick="sw('history')">History</button>
   <button class="tab-btn"        data-tab="artifacts"  onclick="sw('artifacts')">Artifacts</button>
   <button class="tab-btn"        data-tab="guide"      onclick="sw('guide')">Check Guide</button>
@@ -586,6 +645,84 @@ body{font-family:var(--font);background:var(--bg);color:var(--t1);font-size:14px
     </div>
   </div>
 
+  <!-- ═══════════════════════════════════════════════════════════════════
+       CLUSTER ALLOCATION TAB  —  Resource Quota summary
+       3 reports: Summary cards / ResourceQuota breakdown / Node capacity
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-quota">
+
+    <!-- Info bar -->
+    <div class="rq-bar" id="rq-bar">
+      <span>Last fetched: <strong id="rq-fetched">—</strong></span>
+      <span class="rq-bar-sep">│</span>
+      <span id="rq-dur" style="color:var(--t3)"></span>
+      <span id="rq-err" style="display:none;color:var(--fail);font-weight:600"></span>
+      <div class="rq-bar-r">
+        <button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="loadQuota(true)">↻ Refresh</button>
+        <button class="btn btn-s" style="padding:4px 10px;font-size:12px" onclick="downloadQuotaCSV()">⬇ Export CSV</button>
+      </div>
+    </div>
+
+    <!-- ── Report 3: Summary cards ─────────────────────────────────── -->
+    <div id="rq-sum-cards">
+      <div style="padding:36px;text-align:center;color:var(--t3);
+        background:var(--surface);border:1px solid var(--bd);border-radius:var(--r)">
+        <div style="font-size:13px">Click the tab to load cluster resource allocation report</div>
+      </div>
+    </div>
+
+    <!-- ── Report 2: ResourceQuota breakdown ──────────────────────── -->
+    <div class="rq-sec-hdr" id="rq-rq-hdr" onclick="toggleRqSec(this)">
+      <svg class="mchev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="rq-sec-title">Report 2 — ResourceQuota Breakdown by Namespace</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--t3)" id="rq-rq-count"></span>
+    </div>
+    <div class="rq-sec-body" id="rq-rq-body">
+      <div style="padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--bd)">
+        <div class="rq-filters">
+          <input type="text" id="rq-ns-filter"      placeholder="Filter namespace…"   oninput="renderQuotaTable()"  />
+          <select id="rq-quota-filter" onchange="renderQuotaTable()">
+            <option value="all">All namespaces</option>
+            <option value="with">Has ResourceQuota</option>
+            <option value="without">No ResourceQuota</option>
+          </select>
+          <span class="rq-count" id="rq-ns-count"></span>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="rqtbl" id="rq-quota-tbl">
+          <thead id="rq-quota-head"><tr><th>Loading…</th></tr></thead>
+          <tbody id="rq-quota-body"><tr><td>—</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Report 1: Node capacity ─────────────────────────────────── -->
+    <div class="rq-sec-hdr" id="rq-node-hdr" onclick="toggleRqSec(this)">
+      <svg class="mchev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,6 8,10 12,6"/></svg>
+      <span class="rq-sec-title">Report 1 — Node Capacity</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--t3)" id="rq-node-count"></span>
+    </div>
+    <div class="rq-sec-body" id="rq-node-body">
+      <div style="overflow-x:auto">
+        <table class="rqtbl" id="rq-node-tbl">
+          <thead><tr>
+            <th onclick="rqSortNode('name')">Node Name <span class="sa">↕</span></th>
+            <th onclick="rqSortNode('ip')">IP <span class="sa">↕</span></th>
+            <th onclick="rqSortNode('role')">Role <span class="sa">↕</span></th>
+            <th onclick="rqSortNode('status')">Status <span class="sa">↕</span></th>
+            <th onclick="rqSortNode('allocatableCpuM')" style="text-align:right">Allocatable CPU (m) <span class="sa">↕</span></th>
+            <th onclick="rqSortNode('allocatableMemMiB')" style="text-align:right">Allocatable Mem (MiB) <span class="sa">↕</span></th>
+            <th onclick="rqSortNode('capacityCpuCores')" style="text-align:right">Capacity CPU <span class="sa">↕</span></th>
+            <th onclick="rqSortNode('capacityMemMiB')" style="text-align:right">Capacity Mem (MiB) <span class="sa">↕</span></th>
+          </tr></thead>
+          <tbody id="rq-node-body-rows"><tr class="ldr"><td colspan="8">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
   <!-- HISTORY -->
   <div class="tab-panel" id="tab-history">
     <div class="dtbl-wrap">
@@ -637,6 +774,8 @@ let sslData=[], nlData=[], pdbData=[];
 let sslLoaded=false, nlLoaded=false, pdbLoaded=false;
 let sslStats=null;
 let metricsData=null, metricsLoaded=false;
+let quotaData=null,   quotaLoaded=false;
+let rqNodeSort={col:'role',dir:1}, rqQSort={col:'namespace',dir:1};
 const SS={ssl:{col:'daysLeft',dir:1},nl:{col:'node',dir:1},pdb:{col:'color',dir:1}};
 const CMETA={
   control_plane:{label:'Control Plane',icon:'⚙️'},nodes:{label:'Nodes',icon:'🖥️'},
@@ -651,6 +790,7 @@ function sw(t){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+t));
   if(t==='metrics')   loadMetrics();
+  if(t==='quota')     loadQuota();
   if(t==='ssl')       loadSSL();
   if(t==='nodelimits')loadNL();
   if(t==='pdb')       loadPDB();
@@ -1114,6 +1254,384 @@ function sslLog(msg, isErr=false) {
   else       console.log('[SSL]',  msg);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CLUSTER ALLOCATION TAB — Resource Quota (3 reports)
+//
+// Data shape from /api/quota:
+//   { fetchedAt, durationMs,
+//     usedSCNames: ['gp2-csi','gp3-csi','manual'],   ← auto-discovered
+//     nodeRows:  [{name,ip,role,status,allocatableCpuM,allocatableMemMiB,...}],
+//     quotaRows: [{namespace,quotaName,cpuReqM,cpuLimM,memReqMiB,memLimMiB,
+//                  hasQuota,
+//                  'gp2-csi.storageclass.storage.k8s.io/requests.storage': GiB,
+//                  'gp2-csi.storageclass.storage.k8s.io/persistentvolumeclaims': N,
+//                  ...}],
+//     summary: {...} }
+//
+// Storage columns are built dynamically from usedSCNames — no config needed.
+// Each SC gets TWO columns: Storage (GiB) and PVC count.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function toggleRqSec(hdr){ hdr.classList.toggle('collapsed'); }
+
+// ── Key helpers (mirror the backend) ─────────────────────────────────────
+function scStorageKey(sc) { return `${sc}.storageclass.storage.k8s.io/requests.storage`; }
+function scPVCKey(sc)     { return `${sc}.storageclass.storage.k8s.io/persistentvolumeclaims`; }
+
+// ── Format helpers ────────────────────────────────────────────────────────
+function fmtM(m)   { return Number(m).toLocaleString() + ' m'; }
+function fmtMiB(b) {
+  b = Number(b) || 0;
+  if (b >= 1024*1024) return (b/(1024*1024)).toFixed(1)+' TiB';
+  if (b >= 1024)      return (b/1024).toFixed(1)+' GiB';
+  return b.toLocaleString()+' MiB';
+}
+function fmtGiB(g) {
+  g = Number(g) || 0;
+  if (!g) return '—';
+  return g >= 1024 ? (g/1024).toFixed(1)+' TiB' : g.toFixed(1)+' GiB';
+}
+function utilClass(pct)    { return pct>=90?'uf-red':pct>=70?'uf-orange':'uf-green'; }
+function utilCardClass(pct){ return pct>=90?'rqc-red':pct>=70?'rqc-orange':'rqc-green'; }
+function utilValClass(pct) { return pct>=90?'rv-red':pct>=70?'rv-orange':'rv-green'; }
+
+// ── Report 3: Summary cards ────────────────────────────────────────────────
+function renderQuotaSummary(d) {
+  const s   = d.summary;
+  const scs = d.usedSCNames || [];
+
+  const cpuBar = `<div class="util-bar"><div class="util-fill ${utilClass(s.cpuUtilPct)}" style="width:${Math.min(s.cpuUtilPct,100)}%"></div></div>`;
+  const memBar = `<div class="util-bar"><div class="util-fill ${utilClass(s.memUtilPct)}" style="width:${Math.min(s.memUtilPct,100)}%"></div></div>`;
+
+  // One card per storage class — shows total GiB + total PVC count
+  const stoCards = scs.map(sc => {
+    const totalGiB = (s.storageTotals && s.storageTotals[scStorageKey(sc)]) || 0;
+    const totalPVC = (s.storageTotals && s.storageTotals[scPVCKey(sc)])     || 0;
+    return `<div class="rq-card rqc-grey">
+      <div class="rqc-label">${esc(sc)}</div>
+      <div class="rqc-val" style="font-size:18px">${fmtGiB(totalGiB)}</div>
+      <div class="rqc-sub">${totalPVC} PVC${totalPVC!==1?'s':''} · across all namespaces</div>
+    </div>`;
+  }).join('');
+
+  $('rq-sum-cards').innerHTML = `
+  <div class="rq-sum">
+    <div class="rq-card rqc-blue">
+      <div class="rqc-label">Cluster</div>
+      <div class="rqc-val rv-blue">${s.workerCount}W + ${s.masterCount}M</div>
+      <div class="rqc-sub">nodes (workers + masters)</div>
+    </div>
+    <div class="rq-card ${utilCardClass(s.cpuUtilPct)}">
+      <div class="rqc-label">CPU Requests Allocation</div>
+      <div class="rqc-val ${utilValClass(s.cpuUtilPct)}">${s.cpuUtilPct}%</div>
+      <div class="rqc-sub">${fmtM(s.totalRqCpuM)} of ${fmtM(s.totalAllocCpuM)} worker capacity</div>
+      ${cpuBar}
+    </div>
+    <div class="rq-card ${utilCardClass(s.memUtilPct)}">
+      <div class="rqc-label">Memory Requests Allocation</div>
+      <div class="rqc-val ${utilValClass(s.memUtilPct)}">${s.memUtilPct}%</div>
+      <div class="rqc-sub">${fmtMiB(s.totalRqMemMiB)} of ${fmtMiB(s.totalAllocMemMiB)} worker capacity</div>
+      ${memBar}
+    </div>
+    <div class="rq-card rqc-green">
+      <div class="rqc-label">Free CPU Capacity</div>
+      <div class="rqc-val rv-green">${fmtM(s.freeCpuM)}</div>
+      <div class="rqc-sub">unallocated on ready workers</div>
+    </div>
+    <div class="rq-card rqc-green">
+      <div class="rqc-label">Free Memory Capacity</div>
+      <div class="rqc-val rv-green">${fmtMiB(s.freeMemMiB)}</div>
+      <div class="rqc-sub">unallocated on ready workers</div>
+    </div>
+    <div class="rq-card rqc-${s.nsWithoutQuota>0?'orange':'green'}">
+      <div class="rqc-label">Namespaces</div>
+      <div class="rqc-val ${s.nsWithoutQuota>0?'rv-orange':'rv-green'}">${s.nsTotal}</div>
+      <div class="rqc-sub">${s.nsWithQuota} with quota · ${s.nsWithoutQuota} without</div>
+    </div>
+    ${stoCards}
+  </div>
+  <div style="font-size:11px;color:var(--t3);margin-bottom:10px;margin-top:-6px">
+    Storage classes auto-discovered from ResourceQuota definitions:
+    ${scs.map(sc=>`<span style="font-family:var(--mono);background:var(--sf2);padding:1px 6px;border-radius:3px;border:1px solid var(--bd);margin-left:4px">${esc(sc)}</span>`).join('')}
+    ${scs.length===0?'<em>none found in any ResourceQuota</em>':''}
+  </div>`;
+}
+
+// ── Report 2: ResourceQuota breakdown table ────────────────────────────────
+// Two-row grouped header: SC name spans 2 cols, sub-headers "GiB" / "PVCs"
+// Table is horizontally scrollable — many SCs won't break layout.
+function renderQuotaTable() {
+  if (!quotaData) return;
+  const scs = quotaData.usedSCNames || [];
+  const nsF = ($('rq-ns-filter')    || {value:''}).value.toLowerCase().trim();
+  const qF  = ($('rq-quota-filter') || {value:'all'}).value;
+
+  let rows = [...(quotaData.quotaRows || [])];
+  if (nsF)              rows = rows.filter(r => r.namespace.toLowerCase().includes(nsF));
+  if (qF === 'with')    rows = rows.filter(r => r.hasQuota);
+  if (qF === 'without') rows = rows.filter(r => !r.hasQuota);
+
+  const {col, dir} = rqQSort;
+  rows.sort((a,b) => {
+    const av = a[col] ?? '', bv = b[col] ?? '';
+    if (typeof av === 'number') return (av-bv)*dir;
+    return String(av).localeCompare(String(bv))*dir;
+  });
+
+  // Fixed column count: ns + quotaName + cpuReq + cpuLim + memReq + memLim + (2 per SC)
+  const totalCols = 6 + scs.length * 2;
+
+  if (!rows.length) {
+    $('rq-quota-head').innerHTML = '';
+    $('rq-quota-body').innerHTML = `<tr class="ldr"><td colspan="${totalCols}">No namespaces match the filter</td></tr>`;
+    $('rq-ns-count').textContent = '0 rows';
+    return;
+  }
+
+  // ── Two-row grouped header ─────────────────────────────────────────────
+  // Row 1: fixed cols (rowspan=2) + SC group headers (colspan=2)
+  const scGroupHdrs = scs.map(sc =>
+    `<th colspan="2" style="text-align:center;border-left:2px solid var(--bd2)">${esc(sc)}</th>`
+  ).join('');
+  // Row 2: sub-headers for each SC
+  const scSubHdrs = scs.map(sc =>
+    `<th onclick="rqSortQ('${scStorageKey(sc)}')" style="text-align:right;border-left:2px solid var(--bd2)">` +
+    `GiB <span class="sa">↕</span></th>` +
+    `<th onclick="rqSortQ('${scPVCKey(sc)}')" style="text-align:right">PVCs <span class="sa">↕</span></th>`
+  ).join('');
+
+  $('rq-quota-head').innerHTML = `
+    <tr>
+      <th rowspan="2" onclick="rqSortQ('namespace')">Namespace <span class="sa">↕</span></th>
+      <th rowspan="2" onclick="rqSortQ('quotaName')">Quota Name <span class="sa">↕</span></th>
+      <th colspan="2" style="text-align:center;border-left:2px solid var(--bd2)">CPU (m)</th>
+      <th colspan="2" style="text-align:center;border-left:2px solid var(--bd2)">Memory</th>
+      ${scGroupHdrs}
+    </tr>
+    <tr>
+      <th onclick="rqSortQ('cpuReqM')" style="text-align:right;border-left:2px solid var(--bd2)">Requests <span class="sa">↕</span></th>
+      <th onclick="rqSortQ('cpuLimM')" style="text-align:right">Limits <span class="sa">↕</span></th>
+      <th onclick="rqSortQ('memReqMiB')" style="text-align:right;border-left:2px solid var(--bd2)">Req <span class="sa">↕</span></th>
+      <th onclick="rqSortQ('memLimMiB')" style="text-align:right">Lim <span class="sa">↕</span></th>
+      ${scSubHdrs}
+    </tr>`;
+
+  // Mark sorted column
+  $('rq-quota-head').querySelectorAll('th').forEach(th => {
+    const oc = th.getAttribute('onclick') || '';
+    const m  = oc.match(/'([^']+)'/);
+    th.classList.toggle('sorted', !!(m && m[1] === col));
+  });
+
+  // ── Data rows ─────────────────────────────────────────────────────────
+  const zeroTd = `<td class="rq-zero" style="text-align:right">—</td>`;
+
+  const bodyHtml = rows.map(r => {
+    if (!r.hasQuota) {
+      const scCells = scs.map((_,i) =>
+        `<td class="rq-zero" style="text-align:right;${i===0?'border-left:2px solid var(--bd2)':''}">—</td><td class="rq-zero" style="text-align:right">—</td>`
+      ).join('');
+      return `<tr>
+        <td class="rq-ns">${esc(r.namespace)}</td>
+        <td class="rq-no-quota">No ResourceQuota</td>
+        <td class="rq-zero" colspan="4" style="text-align:center;border-left:2px solid var(--bd2)">—</td>
+        ${scCells}
+      </tr>`;
+    }
+    const scCells = scs.map((sc, i) => {
+      const gib  = r[scStorageKey(sc)] || 0;
+      const pvcs = r[scPVCKey(sc)]     || 0;
+      const bdr  = i === 0 ? 'border-left:2px solid var(--bd2)' : '';
+      return `<td class="${gib?'':'rq-zero'}" style="text-align:right;${bdr}">${gib?fmtGiB(gib):'—'}</td>` +
+             `<td class="${pvcs?'':'rq-zero'}" style="text-align:right">${pvcs||'—'}</td>`;
+    }).join('');
+    return `<tr>
+      <td class="rq-ns">${esc(r.namespace)}</td>
+      <td>${esc(r.quotaName)}</td>
+      <td style="text-align:right;border-left:2px solid var(--bd2)">${r.cpuReqM?fmtM(r.cpuReqM):'—'}</td>
+      <td style="text-align:right">${r.cpuLimM?fmtM(r.cpuLimM):'—'}</td>
+      <td style="text-align:right;border-left:2px solid var(--bd2)">${r.memReqMiB?fmtMiB(r.memReqMiB):'—'}</td>
+      <td style="text-align:right">${r.memLimMiB?fmtMiB(r.memLimMiB):'—'}</td>
+      ${scCells}
+    </tr>`;
+  }).join('');
+
+  // ── Grand totals footer ────────────────────────────────────────────────
+  const withRQ   = rows.filter(r => r.hasQuota);
+  const totCpuR  = withRQ.reduce((s,r) => s+r.cpuReqM,   0);
+  const totCpuL  = withRQ.reduce((s,r) => s+r.cpuLimM,   0);
+  const totMemR  = withRQ.reduce((s,r) => s+r.memReqMiB, 0);
+  const totMemL  = withRQ.reduce((s,r) => s+r.memLimMiB, 0);
+  const totScCells = scs.map((sc, i) => {
+    const totG = withRQ.reduce((s,r) => s+(r[scStorageKey(sc)]||0), 0);
+    const totP = withRQ.reduce((s,r) => s+(r[scPVCKey(sc)]||0),     0);
+    const bdr  = i===0 ? 'border-left:2px solid var(--bd2)' : '';
+    return `<td style="text-align:right;font-weight:700;font-size:12px;${bdr}">${fmtGiB(totG)}</td>` +
+           `<td style="text-align:right;font-weight:700;font-size:12px">${totP}</td>`;
+  }).join('');
+  const footHtml = `<tr style="background:var(--sf2);border-top:2px solid var(--bd2)">
+    <td style="font-weight:700;font-size:12px;font-family:var(--font)">Grand Total</td>
+    <td style="color:var(--t3);font-size:11px">${withRQ.length} quota${withRQ.length!==1?'s':''}</td>
+    <td style="text-align:right;font-weight:700;font-size:12px;border-left:2px solid var(--bd2)">${fmtM(totCpuR)}</td>
+    <td style="text-align:right;font-weight:700;font-size:12px">${fmtM(totCpuL)}</td>
+    <td style="text-align:right;font-weight:700;font-size:12px;border-left:2px solid var(--bd2)">${fmtMiB(totMemR)}</td>
+    <td style="text-align:right;font-weight:700;font-size:12px">${fmtMiB(totMemL)}</td>
+    ${totScCells}
+  </tr>`;
+
+  $('rq-quota-body').innerHTML = bodyHtml + footHtml;
+  $('rq-ns-count').textContent = `${rows.length} namespace${rows.length!==1?'s':''}`;
+}
+
+// ── Report 1: Node table ───────────────────────────────────────────────────
+function renderNodeTable() {
+  if (!quotaData) return;
+  let rows = [...(quotaData.nodeRows || [])];
+  const {col, dir} = rqNodeSort;
+  rows.sort((a,b) => {
+    const av = a[col] ?? '', bv = b[col] ?? '';
+    if (typeof av === 'number') return (av-bv)*dir;
+    return String(av).localeCompare(String(bv))*dir;
+  });
+  if (!rows.length) {
+    $('rq-node-body-rows').innerHTML = `<tr class="ldr"><td colspan="8">No node data</td></tr>`;
+    $('rq-node-count').textContent = '';
+    return;
+  }
+  $('rq-node-body-rows').innerHTML = rows.map(r => `<tr>
+    <td style="font-family:var(--mono);font-size:12px">${esc(r.name)}</td>
+    <td style="font-family:var(--mono);font-size:12px">${esc(r.ip)}</td>
+    <td class="${r.role==='Master'?'node-role-master':'node-role-worker'}">${esc(r.role)}</td>
+    <td class="${r.status!=='Ready'?'node-status-nr':''}">${esc(r.status)}</td>
+    <td style="text-align:right">${r.status==='Ready'?fmtM(r.allocatableCpuM):'—'}</td>
+    <td style="text-align:right">${r.status==='Ready'?fmtMiB(r.allocatableMemMiB):'—'}</td>
+    <td style="text-align:right">${esc(String(r.capacityCpuCores))}</td>
+    <td style="text-align:right">${fmtMiB(r.capacityMemMiB)}</td>
+  </tr>`).join('');
+  const workers = rows.filter(r=>r.role==='Worker');
+  $('rq-node-count').textContent = `${rows.length} nodes (${workers.length} workers)`;
+}
+
+// ── Sort helpers ──────────────────────────────────────────────────────────
+function rqSortNode(col) {
+  if (rqNodeSort.col===col) rqNodeSort.dir*=-1; else { rqNodeSort.col=col; rqNodeSort.dir=1; }
+  renderNodeTable();
+}
+function rqSortQ(col) {
+  if (rqQSort.col===col) rqQSort.dir*=-1; else { rqQSort.col=col; rqQSort.dir=1; }
+  renderQuotaTable();
+}
+
+// ── CSV export — all three reports in one file ────────────────────────────
+function csvCell(v) {
+  const s = String(v===null||v===undefined?'':v);
+  return (s.includes(',')||s.includes('"')||s.includes('\n')) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function downloadQuotaCSV() {
+  if (!quotaData) { alert('No data loaded yet.'); return; }
+  const scs = quotaData.usedSCNames || [];
+  const s   = quotaData.summary;
+  const ts  = new Date(quotaData.fetchedAt).toISOString().replace(/[:.]/g,'-');
+  const L   = [];
+
+  // ── Report 3: Summary ──
+  L.push('REPORT 3 - CLUSTER UTILISATION SUMMARY');
+  L.push(['Metric','Value'].map(csvCell).join(','));
+  [['Worker Nodes',s.workerCount],['Master Nodes',s.masterCount],
+   ['Total Allocatable CPU (m)',s.totalAllocCpuM],['Total Allocatable Mem (MiB)',s.totalAllocMemMiB],
+   ['Total Assigned CPU Req (m)',s.totalRqCpuM],['Total Assigned Mem Req (MiB)',s.totalRqMemMiB],
+   ['Free CPU (m)',s.freeCpuM],['Free Mem (MiB)',s.freeMemMiB],
+   ['CPU Allocation %',s.cpuUtilPct+'%'],['Mem Allocation %',s.memUtilPct+'%'],
+  ].forEach(r => L.push(r.map(csvCell).join(',')));
+  scs.forEach(sc => {
+    const gib  = (s.storageTotals&&s.storageTotals[scStorageKey(sc)])||0;
+    const pvcs = (s.storageTotals&&s.storageTotals[scPVCKey(sc)])||0;
+    L.push([`${sc} Total Storage (GiB)`, gib.toFixed(2)].map(csvCell).join(','));
+    L.push([`${sc} Total PVC Count`,      pvcs].map(csvCell).join(','));
+  });
+  L.push(['Namespaces with Quota',s.nsWithQuota].map(csvCell).join(','));
+  L.push(['Namespaces without Quota',s.nsWithoutQuota].map(csvCell).join(','));
+  L.push('');
+
+  // ── Report 2: ResourceQuota breakdown ──
+  L.push('REPORT 2 - RESOURCEQUOTA BREAKDOWN BY NAMESPACE');
+  const scHdrs = scs.flatMap(sc => [`${sc} Storage (GiB)`, `${sc} PVC Count`]);
+  L.push(['Namespace','ResourceQuota Name','CPU Req (m)','CPU Lim (m)','Mem Req (MiB)','Mem Lim (MiB)',...scHdrs].map(csvCell).join(','));
+  quotaData.quotaRows.forEach(r => {
+    const scCols = scs.flatMap(sc => r.hasQuota
+      ? [(r[scStorageKey(sc)]||0).toFixed(2), r[scPVCKey(sc)]||0]
+      : ['','']);
+    L.push([r.namespace,r.quotaName,
+      r.hasQuota?r.cpuReqM:'', r.hasQuota?r.cpuLimM:'',
+      r.hasQuota?r.memReqMiB:'', r.hasQuota?r.memLimMiB:'',
+      ...scCols].map(csvCell).join(','));
+  });
+  // Grand total
+  const wr = quotaData.quotaRows.filter(r=>r.hasQuota);
+  const totScCols = scs.flatMap(sc => [
+    wr.reduce((s,r)=>s+(r[scStorageKey(sc)]||0),0).toFixed(2),
+    wr.reduce((s,r)=>s+(r[scPVCKey(sc)]||0),0),
+  ]);
+  L.push(['GRAND TOTAL','',
+    wr.reduce((s,r)=>s+r.cpuReqM,0), wr.reduce((s,r)=>s+r.cpuLimM,0),
+    wr.reduce((s,r)=>s+r.memReqMiB,0), wr.reduce((s,r)=>s+r.memLimMiB,0),
+    ...totScCols].map(csvCell).join(','));
+  L.push('');
+
+  // ── Report 1: Nodes ──
+  L.push('REPORT 1 - NODE CAPACITY');
+  L.push(['Node Name','IP','Role','Status','Allocatable CPU (m)','Allocatable Mem (MiB)','Capacity CPU','Capacity Mem (MiB)'].map(csvCell).join(','));
+  quotaData.nodeRows.forEach(r => {
+    L.push([r.name,r.ip,r.role,r.status,
+      r.status==='Ready'?r.allocatableCpuM:'', r.status==='Ready'?r.allocatableMemMiB:'',
+      r.capacityCpuCores, r.capacityMemMiB].map(csvCell).join(','));
+  });
+
+  const blob = new Blob([L.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ocp-cluster-allocation-${ts}.csv`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(a.href);
+}
+
+// ── Main load function ─────────────────────────────────────────────────────
+async function loadQuota(force = false) {
+  if (quotaLoaded && !force) return;
+  quotaLoaded = true;
+  $('rq-sum-cards').innerHTML = `
+    <div style="padding:32px;text-align:center;color:var(--t3);
+      background:var(--surface);border:1px solid var(--bd);border-radius:var(--r)">
+      <div class="spn" style="width:20px;height:20px;border-top-color:var(--blue);
+        border-color:rgba(15,98,254,.2);margin:0 auto 12px"></div>
+      Loading cluster allocation data…
+    </div>`;
+  $('rq-err').style.display = 'none';
+  try {
+    const resp = await fetch('/api/quota'+(force?'?force=1':''));
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      const msg = data.error || `HTTP ${resp.status}`;
+      $('rq-err').textContent = '⚠ '+msg; $('rq-err').style.display='inline';
+      $('rq-sum-cards').innerHTML = `<div style="padding:24px;background:var(--fail-bg);border:1px solid var(--fail);border-radius:var(--r);font-size:13px;color:var(--fail)">
+        <strong>Failed to load resource quota data</strong><br>
+        <span style="font-family:var(--mono);font-size:11px">${esc(msg)}</span></div>`;
+      return;
+    }
+    quotaData = data;
+    $('rq-fetched').textContent = data.fetchedAt ? new Date(data.fetchedAt).toLocaleString() : '—';
+    $('rq-dur').textContent     = data.durationMs ? data.durationMs+'ms' : '';
+    renderQuotaSummary(data);
+    renderQuotaTable();
+    renderNodeTable();
+  } catch (e) {
+    $('rq-err').textContent = '⚠ Network error: '+e.message; $('rq-err').style.display='inline';
+    $('rq-sum-cards').innerHTML = `<div style="padding:24px;background:var(--fail-bg);border:1px solid var(--fail);border-radius:var(--r);font-size:13px;color:var(--fail)">
+      <strong>Network error</strong><br><span style="font-family:var(--mono);font-size:11px">${esc(e.message)}</span></div>`;
+  }
+}
+// ═══════════════════════════════════════════════════════════════════════════
+
 async function loadSSL(force=false) {
   if (sslLoaded && !force) return;
   sslLoaded = true;
@@ -1517,7 +2035,7 @@ function startPoll(){
       clearInterval(pollTmr);
       $('notice').classList.remove('show');$('sdot').classList.remove('active');
       resetBtn();
-      sslLoaded=false;nlLoaded=false;pdbLoaded=false;metricsLoaded=false;
+      sslLoaded=false;nlLoaded=false;pdbLoaded=false;metricsLoaded=false;quotaLoaded=false;
       fetchOv();
     }
   },3000);
