@@ -1,363 +1,158 @@
 # Dashboard User Guide
 
-This guide explains how to use the OCP Health Dashboard web interface.
-
 ---
 
-## Table of Contents
+## Tabs Overview
 
-- [Overview Tab](#overview-tab)
-- [SSL Certificates Tab](#ssl-certificates-tab)
-- [Node Limits Tab](#node-limits-tab)
-- [PDB Analysis Tab](#pdb-analysis-tab)
-- [Check Guide](#check-guide)
-- [Run History](#run-history)
-- [Triggering a Manual Run](#triggering-a-manual-run)
-- [Downloading Reports](#downloading-reports)
-- [Sorting Tables](#sorting-tables)
+| Tab | Description |
+|---|---|
+| Overview | Health check results by category |
+| Metrics | Live Prometheus/Thanos data |
+| SSL Certificates | TLS secret expiry across the cluster |
+| Node Limits | CPU/memory request and limit % per node |
+| PDB Analysis | PodDisruptionBudget disruption headroom |
+| **Cluster Allocation** | ResourceQuota report — node capacity and namespace quota breakdown |
+| History | Previous runs with PDF/JSON download |
+| Check Guide | Inline documentation per check |
 
 ---
 
 ## Overview Tab
 
-The Overview tab is the landing page of the dashboard. It shows the current status of all health checks grouped by category.
- 
-![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c08d199c24d245ed44a6f1b81d05645edbd13cbd/images/Landingpage.png "Dashboard Overview")
+Shows all 19 health checks grouped by category. Each check shows pass ✅, fail ❌, error ⚠, or skipped ⊘. Click a failed check to expand details and raw output.
 
-### Header Bar
+The **Run Now** button triggers an immediate check run. The header shows the cluster ID, last run time, and overall pass/fail status.
 
-The header shows:
-- **Cluster ID** — the cluster name set in your configuration
-- **Last run time** — when the most recent check run completed
-- **Overall status badge** — green if all checks passed, red if any failed
-- **Run button** — triggers an immediate check run
-- **Tabs** — navigate between Overview, SSL, Node Limits, PDB, History
+---
 
-### Category Sections
+## Metrics Tab
 
-Checks are grouped into collapsible sections by category:
+Queries Thanos (the OpenShift cluster-internal Prometheus aggregator) and displays the results in four collapsible groups.
 
-```
-▼ 🖥  Control Plane          ✓ 6
-▼ 🔲  Nodes                  ✓ 4
-▼ 📦  Pods                   ✓ 2
-▼ 🌐  Networking             ✓ 3
-▼ 💾  Storage                ✓ 1
-▼ 🔒  Security               ✗ 1
-▼ 📊  Monitoring             ✓ 1
-▼ 🛡  Availability           ✓ 1
-```
+> The Metrics tab uses a separate API call to Thanos — it does **not** run as part of the standard health check cycle. Data is cached for 5 minutes. Click **↻ Refresh** to force a live query.
 
-Clicking the category header collapses or expands it.
+### Groups
 
-### Check Result Row
+**Compute**
+- **CPU Usage** — pods using ≥ threshold % of their CPU limit
+- **Memory Usage** — pods using > threshold % of their memory limit
+- **OOM Kills** — pods that were OOM-killed in the last hour
 
-Each row shows:
+**Storage**
+- **PVC Usage** — PersistentVolumeClaims above the fill threshold
+- **Node Filesystem** — root filesystem (`/`) usage per node above threshold
 
-| Column | Description |
-|---|---|
-| # | Check sequence number |
-| Check | Check name and **?** guide button |
-| Status | `Passed`, `Failed`, `Error`, or `Skipped` badge |
-| Detail | Short summary message |
-| ms | Time the check took to complete |
-| Log | Link to the raw artifact log (📄) if available |
+**etcd**
+- **etcd DB Size** — etcd database size per member; flags if > 8 GB
+- **etcd Peer RTT** — p99 round-trip time between etcd peers; flags if > 100 ms
 
-**Clicking a Failed or Error row** expands an inline detail panel showing the raw `oc` output that caused the failure — exact pod names, namespace, error messages, etc.
+**Active Alerts**
+- All `firing` or `pending` Prometheus alerts with severity `critical` or `warning`
 
-> ![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c0aeecd9687656f68118fbc1d522101d7283f509/images/checkerror.png "Error details")
+### Thresholds Panel
 
-### Status Badges
+Click **⚙ Thresholds** to see all active threshold values and the ConfigMap key to change each one. Changes take effect after updating `ocp-health-metrics-config` and restarting the pod.
 
-| Badge | Colour | Meaning |
-|---|---|---|
-| Passed | Green | All conditions healthy |
-| Failed | Red | One or more conditions unhealthy |
-| Error | Orange | Check could not complete |
-| Skipped | Grey | Check disabled in config |
+### Troubleshooting the Metrics Tab
+
+If the tab shows a connection error:
+1. Verify the `prometheus-k8s` ServiceAccount exists in `openshift-monitoring`
+2. Check the pod logs: `oc logs -l app=ocp-health-dashboard -n ocp-health-dashboard | grep -i thanos`
+3. If `THANOS_HOST` is blank the host is auto-discovered via `oc get route thanos-querier -n openshift-monitoring` — confirm that route exists
 
 ---
 
 ## SSL Certificates Tab
 
-The SSL Certificates tab displays all `kubernetes.io/tls` secrets found in the cluster with their validity details.
-![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c0aeecd9687656f68118fbc1d522101d7283f509/images/ssltab.png "SSL details")
+Lists all `kubernetes.io/tls` secrets found across the cluster (subject to namespace filters). Columns: namespace, secret name, expiry date, days remaining.
 
+**Filters:**
+- *Expiring < 30 days* (default) — only certs expiring soon
+- *All* — every cert found
+- *Valid only* — certs not yet expiring
+- *Excluded* — namespaces skipped by the SSL filter config
 
-### Loading and Refreshing
-
-The tab loads certificate data when you first click it. The data is fetched live from the cluster at that moment — it is not cached from the last scheduled run.
-
-- **↻ Refresh** — re-fetches all certificates from the cluster
-- **🔍 Debug** — shows a panel with raw `oc` output samples (useful if you see 0 certs or parse errors)
-
-### Stats Bar
-
-After loading, a stats bar appears above the table:
-
-```
-TLS secrets found: 232  │  Parsed OK: 198  │  Checked: 182  │  Excluded: 16
-```
-
-| Stat | Meaning |
-|---|---|
-| TLS secrets found | Total `kubernetes.io/tls` secrets with a `tls.crt` data key |
-| Parsed OK | Certs successfully decoded and date-extracted |
-| Checked | Non-excluded certs that are actively monitored |
-| Excluded | Certs in excluded namespaces (shown separately in the Excluded filter) |
-| Parse errors | Certs where the ASN.1 date could not be extracted (shows if > 0) |
-
-### Dropdown Filters
-
-| Filter | Shows |
-|---|---|
-| **Expiring <30 days** *(default)* | Non-excluded certs expiring within the threshold |
-| **All TLS certificates** | Every cert including excluded namespaces |
-| **Valid ≥30 days** | Non-excluded certs that are currently healthy |
-| **Excluded namespaces only** | Certs in the configured excluded namespaces |
-
-### Text Filter
-
-Type in the filter box to narrow results by namespace or secret name. The filter applies on top of the dropdown selection.
-
-### Table Columns
-
-| Column | Description |
-|---|---|
-| Namespace | Kubernetes namespace of the secret |
-| Secret Name | Name of the TLS secret |
-| Start Date | Certificate `notBefore` date (`YYYY-MM-DD`) |
-| Expiry Date | Certificate `notAfter` date (`YYYY-MM-DD`) |
-| Days Left | Days until expiry (negative = already expired) |
-| Status | Colour-coded badge |
-
-### Status Badges
-
-| Badge | Colour | Condition |
-|---|---|---|
-| 🔴 Expired | Red | `daysLeft < 0` |
-| 🟠 Expiring | Orange/Red | `daysLeft < 30` |
-| 🟢 Valid | Green | `daysLeft ≥ 30` |
-| Excluded | Grey | Cert is in an excluded namespace |
-
-### Fetch Log
-
-A collapsible **Fetch log** section under the toolbar records every fetch attempt with timestamps:
-
-```
-[4:21:10 PM] Fetching /api/ssl/certs …
-[4:21:14 PM] OK in 3908ms — TLS found: 232  parsed: 198  excluded: 16  checked: 182  expiring<30d: 21
-```
-
-If an error occurs it is logged here and shown in the error panel above the table.
-
-### Debug Panel
-
-Click **🔍 Debug** to open the debug panel. It calls `/api/ssl/debug` and shows:
-
-- Number of raw bytes returned by `oc`
-- Number of records found (after splitting on the `|||` delimiter)
-- The go-template used
-- First 5 raw record samples (first 200 chars each)
-
-Use this if `parsed: 0` or `parse errors` appears in the stats bar, to verify what `oc` is actually returning.
-
+To change which namespaces are scanned, update `ocp-health-ssl-config` in `k8s/manifests.yaml` and restart the pod.
 
 ---
 
 ## Node Limits Tab
 
-The Node Limits tab shows **scheduled resource utilisation** — how much of each node's CPU and memory capacity has been claimed by pod requests and limits.
+Shows CPU and memory **request %** and **limit %** per node relative to allocatable capacity. Rows where any value exceeds 100% are highlighted — this means the node is over-committed and pods may be evicted or OOM-killed under pressure.
 
-
-![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c0aeecd9687656f68118fbc1d522101d7283f509/images/nodelimits.png "Nodelimits Overview")
-
-
-### Summary Cards
-
-Three cards at the top:
-
-| Card | Meaning |
-|---|---|
-| Total Nodes | Number of nodes in the cluster |
-| Over-committed | Nodes where any metric exceeds 100% |
-| Within Limits | Nodes where all metrics are ≤ 100% |
-
-### Table Columns
-
-| Column | Meaning |
-|---|---|
-| Node | Node hostname |
-| CPU Req (cores) | Total CPU requests in cores |
-| CPU Req % | CPU requests as % of node capacity |
-| CPU Lim (cores) | Total CPU limits in cores |
-| CPU Lim % | CPU limits as % of node capacity |
-| Mem Req (GiB) | Total memory requests |
-| Mem Req % | Memory requests as % of node capacity |
-| Mem Lim (GiB) | Total memory limits |
-| Mem Lim % | Memory limits as % of node capacity |
-| Status | `⚠ Over 100%` or `OK` |
-
-### Colour Coding
-
-| Colour | Threshold |
-|---|---|
-| 🔴 Red, bold | > 100% (over-committed) |
-| 🟠 Orange, bold | > 80% (approaching limit) |
-| ⚪ Normal | ≤ 80% |
-
-### Live Refresh
-
-Click **↻ Live Refresh** to re-run `oc describe node` for all nodes right now. Normal tab loading uses data cached from the last scheduled check run.
+Click **↻ Live Refresh** to re-run the `oc describe node` commands immediately.
 
 ---
 
 ## PDB Analysis Tab
 
-The PDB Analysis tab shows the disruption headroom for every PodDisruptionBudget in your application namespaces.
+Shows every PodDisruptionBudget in the cluster alongside its current disruption headroom (how many pods can be taken down right now without violating the PDB).
 
-
-![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c0aeecd9687656f68118fbc1d522101d7283f509/images/pdb.png "PDB Overview")
-
-### Warning Banner
-
-If any PDB is fully blocked (🔴), a prominent warning banner appears at the top of the tab:
-
-```
-⚠  2 PDB(s) are fully blocked — maintenance on affected nodes is not possible
-   without violating disruption budgets.
-```
-
-### Summary Cards
-
-| Card | Meaning |
+| Colour | Meaning |
 |---|---|
-| Total PDBs | All non-system PDBs found |
-| 🔴 Blocked | Zero disruptions allowed |
-| 🟠 Low HA | < 30% disruption headroom |
-| 🟢 Safe | ≥ 30% disruption headroom |
-| 🔵 Full Outage | 100% allowed (PDB provides no protection) |
+| 🔴 Red | Disruptions are currently blocked (0 allowed) |
+| 🟠 Orange | Only 1 disruption allowed — low HA headroom |
+| 🟢 Green | Healthy headroom |
+| 🔵 Blue | `minAvailable: 0` or `maxUnavailable: 100%` — full disruption allowed |
 
-### Table Columns
+---
 
-| Column | Description |
+## Cluster Allocation Tab
+
+Provides a three-part resource allocation report across all non-platform namespaces. This is the in-dashboard equivalent of running a resource quota audit script against the cluster.
+
+> Data is cached for 5 minutes. Click **↻ Refresh** to force a live fetch. Click **⬇ Export CSV** to download all three reports as a single CSV file.
+
+### Summary Cards (top)
+
+Shows cluster-wide totals at a glance:
+
+| Card | Description |
 |---|---|
-| Namespace | PDB namespace |
-| PDB Name | PDB resource name |
-| Type | `minAvailable` or `maxUnavailable` |
-| Expected | `expectedPods` from PDB status |
-| Healthy | `currentHealthy` from PDB status |
-| Disruptions | Number of pods that can be taken down |
-| % | Disruption headroom as a percentage |
-| Status | Colour-coded remark |
+| Cluster | Worker + master node count |
+| CPU Allocation % | Total CPU requests across all quotas vs total worker allocatable CPU |
+| Memory Allocation % | Same for memory |
+| Free CPU / Free Memory | Unallocated worker capacity |
+| Namespaces | Total checked, how many have a quota, how many don't |
+| *Per storage class* | Total storage quota (GiB) + total PVC count — one card per storage class found |
 
-### Interpreting Results
+Allocation % cards are colour-coded: green (< 70%), orange (70–89%), red (≥ 90%).
 
-**Blocked (🔴):** The PDB currently allows zero disruptions. If you need to drain a node that runs these pods, you must either scale up the deployment first, or temporarily delete and recreate the PDB.
+### Report 2 — ResourceQuota Breakdown
 
-**Low HA (🟠):** Headroom exists but is tight. A single unexpected pod failure would block node drains.
+A table with one row per ResourceQuota (namespaces with no quota show a single "No ResourceQuota" row). Columns:
 
-**Safe (🟢):** Normal healthy state. Node maintenance can proceed.
+- Namespace
+- Quota name
+- CPU Requests / CPU Limits
+- Memory Requests / Memory Limits
+- *One column group per storage class* — Storage (GiB) and PVC count
 
-**Full Outage (🔵):** The PDB technically allows 100% disruption — it is not providing any protection. This may be intentional (e.g. a single-replica dev deployment) but should be reviewed for production workloads.
+**Storage class columns are auto-discovered.** The dashboard scans all ResourceQuota `.spec.hard` keys for the pattern `<scname>.storageclass.storage.k8s.io/requests.storage`. Every unique storage class found across all namespaces becomes a column group — no configuration required. When a new storage class is added to any quota, it appears on the next refresh.
 
----
+Use the **namespace filter** (text search) and **quota filter** (dropdown: all / has quota / no quota) to narrow the table. All columns are sortable. A grand total row appears at the bottom.
 
-## Check Guide
+### Report 1 — Node Capacity
 
-Every row in the Overview tab has a **?** button next to the check name. Clicking it opens an inline guide panel that explains:
+Lists all nodes with role (Master / Worker), status (Ready / NotReady), allocatable CPU (millicores), and allocatable memory. Only Ready workers are counted in the summary totals.
 
-- What the check monitors
-- Why it matters for cluster health
-- The most common causes of failure
-- Suggested remediation steps
+### CSV Export
 
+The exported file contains all three reports in separate sections:
+- **REPORT 3** — cluster utilisation summary (matches the summary cards)
+- **REPORT 2** — full ResourceQuota breakdown including all storage class columns
+- **REPORT 1** — node capacity
 
-The guide panel can be closed by clicking the **?** button again or clicking elsewhere on the row.
-
----
-
-## Run History
-
-Click the **History** tab to see a list of previous check runs.
-
-
-![Overview tab screenshot](https://github.com/arjun0451/ocp-health-dashboard/blob/c0aeecd9687656f68118fbc1d522101d7283f509/images/history.png "Run history")
-
-
-Each entry shows:
-- Run timestamp
-- Run ID
-- Overall pass/fail status
-- Number of checks passed vs failed
-- Links to download the run report in JSON or PDF format
-
-Clicking a run entry loads its results in the Overview tab so you can compare against the current state.
-
-**Retention:** Old runs are automatically deleted after the configured `ARTIFACT_RETENTION_DAYS` (default: 30). The PVC stores all run data so history survives pod restarts.
+Storage class columns in the CSV are dynamically named to match whatever was discovered at fetch time.
 
 ---
 
-## Triggering a Manual Run
+## History Tab
 
-You can trigger a check run at any time without waiting for the schedule:
-
-**From the UI:**  
-Click the **▶ Run Now** button in the dashboard header. The button becomes disabled during the run and re-enables when the run completes.
-
-**From the API:**
-```bash
-ROUTE=$(oc get route ocp-health-dashboard \
-  -n ocp-health-dashboard \
-  -o jsonpath='{.spec.host}')
-
-curl -s -X POST https://${ROUTE}/api/run | jq .
-```
-
-Response:
-```json
-{ "message": "Run triggered", "triggeredBy": "api" }
-```
+Lists all previous runs. Click any row to see full results for that run. Use the download buttons to export as JSON or PDF.
 
 ---
 
-## Downloading Reports
+## Check Guide Tab
 
-Reports are available in **JSON** and **PDF** formats for every completed run.
-
-**From the UI:** Click the run entry in the History tab, then use the download buttons.
-
-**From the API:**
-```bash
-ROUTE=$(oc get route ocp-health-dashboard \
-  -n ocp-health-dashboard \
-  -o jsonpath='{.spec.host}')
-
-# Latest run JSON:
-curl -s https://${ROUTE}/api/report/latest/json | jq .
-
-# Latest run PDF:
-curl -s -o report.pdf https://${ROUTE}/api/report/latest/pdf
-
-# Specific run by ID:
-curl -s https://${ROUTE}/api/report/run-1234567890/json | jq .
-```
-
-The PDF report includes:
-- Cluster ID and run timestamp
-- Overall summary (pass/fail counts per category)
-- Full results table for all checks
-- Raw output details for failed checks
-
----
-
-## Sorting Tables
-
-All tables in the SSL, Node Limits, and PDB tabs support column sorting.
-
-Click any **column header** to sort ascending. Click again to sort descending. The active sort column shows an arrow indicator.
-
-Default sort orders when a tab loads:
-- **SSL tab:** by `daysLeft` ascending (most critical first)
-- **Node Limits tab:** by node name
-- **PDB tab:** by colour rank (blocked first)
+Select any check from the sidebar to see a description of what it monitors, the `oc` command it uses, and what to do when it fails.

@@ -1,6 +1,6 @@
 # Health Checks Reference
 
-The dashboard runs **19 health checks** grouped into 8 categories. This page documents what each check does, what `oc` commands it runs, and what conditions cause it to pass or fail.
+The dashboard runs **19 scheduled health checks** plus **8 live Prometheus/Thanos metric checks** available in the Metrics tab.
 
 ---
 
@@ -8,461 +8,140 @@ The dashboard runs **19 health checks** grouped into 8 categories. This page doc
 
 | Status | Meaning |
 |---|---|
-| ✅ **Passed** | All conditions are healthy |
-| ❌ **Failed** | One or more conditions outside acceptable range |
-| ⚠️ **Error** | The check itself could not complete (e.g. `oc` command failed) |
-| ⊘ **Skipped** | Check disabled via config or env var |
+| ✅ Passed | All conditions healthy |
+| ❌ Failed | One or more conditions outside threshold |
+| ⚠️ Error | Check could not complete (e.g. `oc` command failed) |
+| ⊘ Skipped | Disabled via config |
 
 ---
 
 ## Control Plane
 
-### Cluster Operators
+### Cluster Operators — `cluster_operators`
+Checks that every ClusterOperator is `AVAILABLE=True`, `PROGRESSING=False`, `DEGRADED=False`.
 
-**Check ID:** `cluster_operators`
+### Cluster Version — `cluster_version`
+Checks the overall cluster version object is not degraded or stuck updating.
 
-Verifies that all ClusterOperators are in a healthy state.
+### MachineConfigPool — `machine_config_pool`
+Checks all MCPs are `UPDATED=True`, `UPDATING=False`, `DEGRADED=False`.
 
-**Command:**
-```bash
-oc get co --no-headers
-```
+### Etcd Health — `etcd_health`
+Execs into an etcd pod and runs `etcdctl endpoint health --cluster`. Fails if any member reports unhealthy.
 
-**Pass condition:** Every operator has `AVAILABLE=True`, `PROGRESSING=False`, `DEGRADED=False`.
+### Authentication — `authentication`
+Checks pods in `openshift-authentication` are Running and Ready.
 
-**Fail condition:** Any operator has `AVAILABLE=False`, `PROGRESSING=True`, or `DEGRADED=True`.
-
-**Common failures:**
-- An operator stuck upgrading (`PROGRESSING=True` for > 20 minutes)
-- `authentication` or `console` operator degraded after config change
-- Storage operator unavailable due to backend issues
-
----
-
-### Cluster Version
-
-**Check ID:** `cluster_version`
-
-Checks the overall cluster version and update status.
-
-**Command:**
-```bash
-oc get clusterversion --no-headers
-```
-
-**Pass condition:** `AVAILABLE=True`, `PROGRESSING=False`, `DEGRADED=False`.
-
-**Fail condition:** Cluster update has failed or the version object reports degraded state.
-
----
-
-### MachineConfigPool
-
-**Check ID:** `machine_config_pool`
-
-Checks that all MachineConfigPools are updated and not degraded.
-
-**Command:**
-```bash
-oc get mcp --no-headers
-```
-
-**Pass condition:** All MCPs show `UPDATED=True`, `UPDATING=False`, `DEGRADED=False`.
-
-**Fail condition:** Any MCP is still updating or has entered a degraded state.
-
-**Note:** During a cluster upgrade, MCPs will temporarily show `UPDATING=True`. This is expected and does not indicate a real failure during a controlled upgrade window.
-
----
-
-### Etcd Cluster Health
-
-**Check ID:** `etcd_health`
-
-Runs `etcdctl endpoint health` against the etcd cluster via `oc exec`.
-
-**Command:**
-```bash
-oc exec -n openshift-etcd <etcd-pod> -- \
-  etcdctl endpoint health --cluster
-```
-
-**Pass condition:** All endpoints report `healthy: true`.
-
-**Fail condition:** Any endpoint is unhealthy or unreachable.
-
-**Note:** Requires the etcd pods to be running in `openshift-etcd`. The check automatically selects the first available etcd pod.
-
----
-
-### Authentication Pods
-
-**Check ID:** `authentication`
-
-Verifies that OAuth/authentication pods are running.
-
-**Command:**
-```bash
-oc get pods -n openshift-authentication --no-headers
-```
-
-**Pass condition:** All pods are `Running` with `READY` matching `DESIRED`.
-
-**Fail condition:** Any pod is not `Running`, or is in `CrashLoopBackOff`, `Error`, or `Pending`.
-
----
-
-### Control Plane Pods
-
-**Check ID:** `control_plane_pods`
-
-Checks pods in the four core control plane namespaces.
-
-**Namespaces checked:**
-- `openshift-kube-apiserver`
-- `openshift-kube-scheduler`
-- `openshift-kube-controller-manager`
-- `openshift-etcd`
-
-**Command:**
-```bash
-oc get pods --all-namespaces --no-headers
-```
-
-**Pass condition:** All pods in these namespaces are `Running` and ready.
-
-**Fail condition:** Any non-ready pod found. Installer and revision-pruner pods (which are short-lived by design) are automatically excluded from failure evaluation.
+### Control Plane Pods — `control_plane_pods`
+Checks static pods in `openshift-kube-apiserver`, `openshift-kube-scheduler`, `openshift-kube-controller-manager`, and `openshift-etcd` are Running.
 
 ---
 
 ## Nodes
 
-### Node Readiness
+### Node Readiness — `node_readiness`
+Checks all nodes report `Ready=True`. Lists any NotReady nodes.
 
-**Check ID:** `node_readiness`
+### Node CPU — `node_cpu`
+Uses `oc adm top nodes` to check CPU utilisation % against threshold (default: 80%).
 
-Checks that all nodes are in `Ready` state.
+### Node Memory — `node_memory`
+Uses `oc adm top nodes` to check memory utilisation % against threshold (default: 85%).
 
-**Command:**
-```bash
-oc get nodes --no-headers
-```
-
-**Pass condition:** All nodes show `STATUS=Ready`.
-
-**Fail condition:** Any node is `NotReady`, `SchedulingDisabled`, or in an unknown state.
-
----
-
-### Node CPU Usage
-
-**Check ID:** `node_cpu`
-
-Monitors CPU utilisation across all nodes.
-
-**Command:**
-```bash
-oc adm top nodes --no-headers
-```
-
-**Pass condition:** All nodes below the configured threshold (default: 80%).
-
-**Fail condition:** Any node CPU usage exceeds the threshold.
-
-**Configuration:**
-```yaml
-- id: node_cpu
-  threshold: 80    # percent — change to your desired limit
-```
-
----
-
-### Node Memory Usage
-
-**Check ID:** `node_memory`
-
-Monitors memory utilisation across all nodes.
-
-**Command:**
-```bash
-oc adm top nodes --no-headers
-```
-
-**Pass condition:** All nodes below the configured threshold (default: 80%).
-
-**Fail condition:** Any node memory usage exceeds the threshold.
-
-**Configuration:**
-```yaml
-- id: node_memory
-  threshold: 80    # percent
-```
-
----
-
-### Node Resource Limits
-
-**Check ID:** `node_limits`
-
-Checks the **allocated** resource requests and limits against each node's total capacity. This is different from `node_cpu`/`node_memory` which measure actual current usage — this check measures what is *scheduled*.
-
-**Commands:**
-```bash
-oc get nodes -o json                     # get node list
-oc describe node <node-name>             # for each node, get allocated resources
-```
-
-**Metrics collected per node:**
-
-| Metric | Description |
-|---|---|
-| CPU Requests | Sum of all pod CPU requests as % of node CPU |
-| CPU Limits | Sum of all pod CPU limits as % of node CPU |
-| Memory Requests | Sum of all pod memory requests as % of node memory |
-| Memory Limits | Sum of all pod memory limits as % of node memory |
-
-**Pass condition:** All four metrics are ≤ 100% on all nodes.
-
-**Fail condition:** Any metric exceeds 100% on any node (over-committed).
-
-**Dashboard tab:** Results are also displayed in the **Node Limits** tab with a sortable table and colour-coded percentages (red > 100%, orange > 80%, green ≤ 80%).
-
-> **Screenshot placeholder:**  
-> `[screenshot: Node Limits tab showing per-node CPU and memory request/limit percentages]`
+### Node Limits — `node_limits`
+Parses `oc describe node` for each node to check that CPU and memory requests/limits do not exceed 100% of allocatable capacity (over-commitment check).
 
 ---
 
 ## Pods
 
-### Platform Namespace Pods
+### Platform Pods — `platform_pods`
+Checks pods in `openshift-*` and `kube-*` namespaces are Running or Completed. Lists any in CrashLoopBackOff, Error, or Pending state.
 
-**Check ID:** `platform_pods`
-
-Checks all pods in OpenShift platform namespaces (`openshift-*` and `kube-*`).
-
-**Command:**
-```bash
-oc get pods --all-namespaces --no-headers
-```
-
-Filters for pods in namespaces matching `openshift-*` or `kube-*`.
-
-**Pass condition:** All platform pods are `Running` and ready.
-
-**Fail condition:** Any platform pod is not ready (excluding known short-lived pods like installers and pruners).
-
----
-
-### Non-Platform Pods
-
-**Check ID:** `non_platform_pods`
-
-Checks pods in all non-platform namespaces (your application workloads).
-
-**Command:**
-```bash
-oc get pods --all-namespaces --no-headers
-```
-
-Filters for pods NOT in `openshift-*`, `kube-*`, or `default`.
-
-**Pass condition:** No pods are in `CrashLoopBackOff`, `Error`, `OOMKilled`, or `Evicted` state.
-
-**Fail condition:** Any application pod is in a failed state.
-
-**Note:** `Pending` pods are reported as a warning but do not cause the check to fail — scheduling delays are not always a health issue.
+### Non-Platform Pods — `non_platform_pods`
+Same check for all other (workload) namespaces.
 
 ---
 
 ## Networking
 
-### API Server Health
+### API Server — `api_server`
+HTTP probe to the cluster API server `/readyz` endpoint.
 
-**Check ID:** `api_server`
+### Ingress Controller — `ingress_controller`
+HTTP probe to the console URL to verify the default ingress router is reachable.
 
-Performs an HTTPS health probe against the OpenShift API server.
-
-**Probe target:** `${API_URL}/readyz`
-
-**Pass condition:** HTTP 200 response from `/readyz`.
-
-**Fail condition:** Non-200 response, connection refused, or timeout.
-
----
-
-### Ingress Controller Health
-
-**Check ID:** `ingress_controller`
-
-Checks that the OpenShift ingress controller is responding.
-
-**Probe target:** `${CONSOLE_URL}` (the console URL is always served by the default ingress controller)
-
-**Pass condition:** HTTP 200 or 301/302 redirect response (console redirects to login).
-
-**Fail condition:** Connection error, timeout, or server error (5xx).
-
----
-
-### Machine Config Server
-
-**Check ID:** `machine_config_server`
-
-Verifies the Machine Config Server (MCS) is operational by checking its pods and ClusterOperator status.
-
-**Commands:**
-```bash
-oc get pods -n openshift-machine-config-operator --no-headers
-oc get co machine-config --no-headers
-```
-
-**Pass condition:** MCS pods are running AND the `machine-config` ClusterOperator is available.
-
-**Fail condition:** MCS pods not running or ClusterOperator degraded.
-
-**Note:** The MCS listens on port 22623 and is not externally accessible. This check does not probe that port directly — it uses pod status and the CO status instead.
+### Machine Config Server — `machine_config_server`
+HTTP probe to the MCS endpoint used by nodes during bootstrapping.
 
 ---
 
 ## Storage
 
-### PVC and PV Health
-
-**Check ID:** `pvc_health`
-
-Checks all PersistentVolumeClaims across the cluster.
-
-**Command:**
-```bash
-oc get pvc --all-namespaces --no-headers
-```
-
-**Pass condition:** All PVCs are in `Bound` state.
-
-**Fail condition:** Any PVC is `Pending`, `Lost`, or in an unknown state.
-
-**Note:** `Pending` PVCs indicate a provisioning failure — the underlying StorageClass or storage backend cannot fulfil the request.
+### PVC Health — `pvc_health`
+Lists all PVCs across all namespaces. Fails if any are in `Pending` or `Lost` state.
 
 ---
 
 ## Security
 
-### SSL Certificate Expiry
-
-**Check ID:** `ssl_certificates`
-
-Scans all `kubernetes.io/tls` secrets in the cluster and checks certificate expiry dates.
-
-**Command:**
-```bash
-oc get secrets --all-namespaces \
-  -o go-template='{{range .items}}
-  {{if and (eq .type "kubernetes.io/tls") (index .data "tls.crt")}}
-  {{.metadata.namespace}} {{.metadata.name}} {{index .data "tls.crt"}}|||
-  {{end}}{{end}}'
-```
-
-**Decoding:** Each cert value is `base64(PEM_TEXT)`. The check double-decodes to raw DER bytes, then scans for ASN.1 `UTCTime`/`GeneralizedTime` tags to extract `notBefore` and `notAfter` without requiring `openssl` in the container.
-
-**Pass condition:** No non-excluded certs expiring within the threshold (default: 30 days).
-
-**Fail condition:** One or more non-excluded certs expiring within the threshold.
-
-**Configuration:** See [SSL namespace filtering](configuration.md#configmap-ocp-health-ssl-config).
-
-**Dashboard tab:** The **SSL Certificates** tab shows all certs with sortable columns and four filter modes:
-- *Expiring <30 days* (default view)
-- *All TLS certificates*
-- *Valid ≥30 days*
-- *Excluded namespaces only*
-
-> **Screenshot placeholder:**  
-> `[screenshot: SSL Certificates tab with expiry filter showing red/orange badges]`
+### SSL Certificates — `ssl_certificates`
+Scans all `kubernetes.io/tls` secrets and parses the certificate expiry date. Fails if any certificate expires within the configured threshold (default: 30 days). Namespace inclusions/exclusions are configurable.
 
 ---
 
 ## Monitoring
 
-### Monitoring Stack
-
-**Check ID:** `monitoring_stack`
-
-Checks that the core monitoring components are running.
-
-**Command:**
-```bash
-oc get pods -n openshift-monitoring --no-headers
-```
-
-**Key components checked:**
-- `prometheus-k8s-0` and `prometheus-k8s-1`
-- `alertmanager-main-0` and `alertmanager-main-1`
-- `prometheus-operator`
-- `thanos-querier`
-
-**Pass condition:** All monitoring pods are `Running` and ready.
-
-**Fail condition:** Any core monitoring pod is not ready.
+### Monitoring Stack — `monitoring_stack`
+Checks that pods in `openshift-monitoring` are Running. Flags any pod not in a healthy state.
 
 ---
 
 ## Availability
 
-### PodDisruptionBudget Health
-
-**Check ID:** `pdb_health`
-
-Analyses all PodDisruptionBudgets (PDBs) to determine disruption headroom — how many pods could be taken down for maintenance without breaching the PDB.
-
-**Command:**
-```bash
-oc get pdb -A -o json
-```
-
-**Namespaces excluded:** All `openshift-*` namespaces (system PDBs are not actionable).
-
-**Disruption calculation:**
-
-For `minAvailable` PDBs:
-```
-disruptionsAllowed = currentHealthy - minAvailable
-```
-
-For `maxUnavailable` PDBs:
-```
-disruptionsAllowed = maxUnavailable - (expectedPods - currentHealthy)
-disruptionsAllowed = max(0, disruptionsAllowed)
-```
-
-**Colour classification:**
-
-| Colour | Condition | Meaning |
-|---|---|---|
-| 🔴 Red | `disruptionsAllowed = 0` AND `expectedPods > 0` | Fully blocked — no maintenance possible |
-| 🟠 Orange | `disruptionsPercent < 30%` | Low headroom — proceed with caution |
-| 🟢 Green | `disruptionsPercent ≥ 30%` | Healthy headroom |
-| 🔵 Blue | `disruptionsPercent = 100%` | Full outage allowed (PDB is not protecting) |
-
-`disruptionsPercent = floor((disruptionsAllowed / expectedPods) × 100)`
-
-**Pass condition:** No PDBs are in blocked (🔴) state.
-
-**Fail condition:** Any application PDB is fully blocked.
-
-**Dashboard tab:** The **PDB Analysis** tab shows summary cards, a warning banner if any PDB is fully blocked, a sortable table per PDB, and a colour legend.
-
-> **Screenshot placeholder:**  
-> `[screenshot: PDB Analysis tab showing summary cards and colour-coded table]`
+### PDB Health — `pdb_health`
+Lists all PodDisruptionBudgets and checks current disruption allowance. Flags PDBs where zero disruptions are currently permitted (blocks node drains).
 
 ---
 
-## Check Guide (Inline Documentation)
+## Metrics Tab Checks
 
-Every check in the dashboard results table has a **?** button that opens an inline Check Guide panel. The panel explains:
+These checks run **on demand** against Thanos (the OpenShift cluster Prometheus aggregator) — not as part of the scheduled run cycle. Results are cached for 5 minutes.
 
-- What the check does
-- Why it matters
-- Common causes of failure
-- Suggested remediation steps
+### CPU Usage — `cpu_usage`
+Pods using ≥ `PROM_CPU_THRESHOLD` % (default: 90%) of their CPU limit. Uses `container_cpu_usage_seconds_total` vs `kube_pod_container_resource_limits`.
 
-The content is served from the server via `GET /api/docs/:checkId` and does not require an internet connection.
+### Memory Usage — `memory_usage`
+Pods using > `PROM_MEM_THRESHOLD` % (default: 80%) of their memory limit. Uses `container_memory_working_set_bytes` vs limits.
+
+### OOM Kills — `oom_killed`
+Pods that have been OOM-killed in the last `PROM_OOM_WINDOW` (default: 1 hour). Uses `kube_pod_container_status_last_terminated_reason`.
+
+### PVC Usage — `pvc_usage`
+PersistentVolumeClaims with fill level above `PROM_PVC_THRESHOLD` % (default: 70%). Uses `kubelet_volume_stats_used_bytes` / capacity.
+
+### Node Filesystem — `node_filesystem`
+Root filesystem (`mountpoint="/"`) usage per node above `PROM_FS_USED_THRESHOLD` % (default: 90%). Excludes `ibmc-s3fs` mounts and read-only filesystems.
+
+### etcd DB Size — `etcd_db_size`
+etcd database size per member. Flags members exceeding `PROM_ETCD_DB_BYTES` (default: 8 GB). Uses `etcd_mvcc_db_total_size_in_bytes`. Always shows all members (info mode).
+
+### etcd Peer RTT — `etcd_rtt`
+p99 round-trip time between etcd peers. Flags if > `PROM_ETCD_RTT_MS` (default: 100 ms). Uses `etcd_network_peer_round_trip_time_seconds`. Always shows all members.
+
+### Active Alerts — `active_alerts`
+All `firing` or `pending` Prometheus alerts with severity matching `PROM_ALERT_SEVERITIES` (default: `critical,warning`).
+
+---
+
+## Cluster Allocation Tab
+
+Not a scheduled check — fetched on demand via `/api/quota`. Scans all non-platform namespaces and reports:
+
+- **Node capacity** — allocatable CPU (m) and memory (MiB) per node, worker vs master
+- **ResourceQuota breakdown** — CPU requests/limits, memory requests/limits, and per-storage-class quota (GiB) and PVC count per namespace
+- **Cluster summary** — total worker capacity vs total allocated, free capacity, storage totals
+
+Storage class columns are auto-discovered from ResourceQuota `.spec.hard` keys — no config required. Any storage class present in any quota appears as a column.
+
+Namespaces with prefix `openshift-`, `kube-`, or `default` are excluded by default (configurable via `RQ_SKIP_NAMESPACES`).
